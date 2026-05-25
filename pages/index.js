@@ -7,7 +7,6 @@ const supabase = createClient(
 )
 
 const STONEBRIDGE_ORG_ID = '9b736a98-f0d3-4930-b377-83b9e30bb9e0'
-const PAGE_SIZE = 10
 
 export async function getServerSideProps() {
   const { data: progressData, error: progressError } = await supabase
@@ -27,19 +26,13 @@ export async function getServerSideProps() {
       const fullName = p.first_name && p.last_name
         ? `${p.first_name} ${p.last_name}`
         : null
-      advisorMap[p.email] = {
-        name: fullName,
-        email: p.email,
-        nssa: null,
-        irmaa: null
-      }
+      advisorMap[p.email] = { name: fullName, email: p.email, nssa: null, irmaa: null }
     }
     if (p.course === 'NSSA') advisorMap[p.email].nssa = p
     if (p.course === 'IRMAA' || p.course === 'IRMAACP') advisorMap[p.email].irmaa = p
   })
 
-  const advisors = Object.values(advisorMap)
-  return { props: { advisors } }
+  return { props: { advisors: Object.values(advisorMap) } }
 }
 
 function pct(num, den) {
@@ -100,6 +93,23 @@ function MetricBar({ value, total, color }) {
 
 const td = { padding: '12px 16px', fontSize: '13px' }
 const th = { padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 500, color: '#666', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }
+const selectStyle = { fontSize: '13px', padding: '6px 10px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white' }
+
+function matchesStatus(advisor, statusFilter, courseFilter) {
+  if (statusFilter === 'all') return true
+
+  const courses = []
+  if (courseFilter === 'all' || courseFilter === 'nssa') { if (advisor.nssa) courses.push(advisor.nssa) }
+  if (courseFilter === 'all' || courseFilter === 'irmaa') { if (advisor.irmaa) courses.push(advisor.irmaa) }
+
+  if (courses.length === 0) return false
+
+  if (statusFilter === 'certified') return courses.some(c => c.certified)
+  if (statusFilter === 'needs-exam') return courses.some(c => c.pct_complete === 100 && !c.exam_purchased)
+  if (statusFilter === 'in-progress') return courses.some(c => c.pct_complete > 0 && c.pct_complete < 100)
+  if (statusFilter === 'not-started') return courses.some(c => c.pct_complete === 0)
+  return true
+}
 
 export default function Dashboard({ advisors }) {
   const [courseFilter, setCourseFilter] = useState('all')
@@ -107,7 +117,10 @@ export default function Dashboard({ advisors }) {
   const [sortCol, setSortCol] = useState('name')
   const [sortDir, setSortDir] = useState('asc')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
 
+  const nssaEnrolled = advisors.filter(a => a.nssa).length
+  const irmaaEnrolled = advisors.filter(a => a.irmaa).length
   const nssaCertified = advisors.filter(a => a.nssa?.certified).length
   const irmaaCertified = advisors.filter(a => a.irmaa?.certified).length
   const nssaComplete = advisors.filter(a => a.nssa?.pct_complete === 100).length
@@ -116,17 +129,6 @@ export default function Dashboard({ advisors }) {
     (a.nssa?.pct_complete === 100 && !a.nssa?.exam_purchased) ||
     (a.irmaa?.pct_complete === 100 && !a.irmaa?.exam_purchased)
   ).length
-  const nssaEnrolled = advisors.filter(a => a.nssa).length
-  const irmaaEnrolled = advisors.filter(a => a.irmaa).length
-
-  function getStatus(advisor) {
-    const courses = [advisor.nssa, advisor.irmaa].filter(Boolean)
-    if (courses.some(c => c.certified)) return 'certified'
-    if (courses.some(c => c.pct_complete === 100 && !c.exam_purchased)) return 'needs-exam'
-    if (courses.some(c => c.pct_complete > 0)) return 'in-progress'
-    if (courses.some(c => c.pct_complete === 0)) return 'not-started'
-    return 'not-enrolled'
-  }
 
   function handleSort(col) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -136,23 +138,16 @@ export default function Dashboard({ advisors }) {
 
   const filtered = useMemo(() => {
     let list = [...advisors]
+
     if (courseFilter === 'nssa') list = list.filter(a => a.nssa)
     if (courseFilter === 'irmaa') list = list.filter(a => a.irmaa)
-    if (statusFilter === 'certified') list = list.filter(a => a.nssa?.certified || a.irmaa?.certified)
-    if (statusFilter === 'needs-exam') list = list.filter(a =>
-      (a.nssa?.pct_complete === 100 && !a.nssa?.exam_purchased) ||
-      (a.irmaa?.pct_complete === 100 && !a.irmaa?.exam_purchased))
-    if (statusFilter === 'in-progress') list = list.filter(a =>
-      [a.nssa, a.irmaa].filter(Boolean).some(c => c.pct_complete > 0 && c.pct_complete < 100))
-    if (statusFilter === 'not-started') list = list.filter(a =>
-      [a.nssa, a.irmaa].filter(Boolean).every(c => c.pct_complete === 0))
+    list = list.filter(a => matchesStatus(a, statusFilter, courseFilter))
 
     list.sort((a, b) => {
       let av, bv
       if (sortCol === 'name') { av = a.name || a.email; bv = b.name || b.email }
       else if (sortCol === 'nssa') { av = a.nssa?.pct_complete ?? -1; bv = b.nssa?.pct_complete ?? -1 }
       else if (sortCol === 'irmaa') { av = a.irmaa?.pct_complete ?? -1; bv = b.irmaa?.pct_complete ?? -1 }
-      else if (sortCol === 'status') { av = getStatus(a); bv = getStatus(b) }
       if (av < bv) return sortDir === 'asc' ? -1 : 1
       if (av > bv) return sortDir === 'asc' ? 1 : -1
       return 0
@@ -160,8 +155,13 @@ export default function Dashboard({ advisors }) {
     return list
   }, [advisors, courseFilter, statusFilter, sortCol, sortDir])
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const totalPages = Math.ceil(filtered.length / pageSize)
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize)
+
+  function handlePageSize(val) {
+    setPageSize(Number(val))
+    setPage(1)
+  }
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1300px', margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
@@ -189,12 +189,12 @@ export default function Dashboard({ advisors }) {
       </div>
 
       <div style={{ display: 'flex', gap: '10px', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <select value={courseFilter} onChange={e => { setCourseFilter(e.target.value); setPage(1) }} style={{ fontSize: '13px', padding: '6px 10px', borderRadius: '6px', border: '1px solid #d1d5db' }}>
+        <select style={selectStyle} value={courseFilter} onChange={e => { setCourseFilter(e.target.value); setPage(1) }}>
           <option value="all">All courses</option>
           <option value="nssa">NSSA only</option>
           <option value="irmaa">IRMAACP only</option>
         </select>
-        <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1) }} style={{ fontSize: '13px', padding: '6px 10px', borderRadius: '6px', border: '1px solid #d1d5db' }}>
+        <select style={selectStyle} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1) }}>
           <option value="all">All statuses</option>
           <option value="certified">Certified</option>
           <option value="needs-exam">Needs exam</option>
@@ -236,20 +236,38 @@ export default function Dashboard({ advisors }) {
                 <CourseColumns course={advisor.irmaa} />
               </tr>
             ))}
+            {paginated.length === 0 && (
+              <tr>
+                <td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: '#999', fontSize: '13px' }}>
+                  No advisors match the current filters
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
 
-        {totalPages > 1 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderTop: '1px solid #f3f4f6', background: '#fafafa' }}>
-            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.5 : 1 }}>
-              Previous
-            </button>
-            <span style={{ fontSize: '13px', color: '#666' }}>Page {page} of {totalPages}</span>
-            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', cursor: page === totalPages ? 'not-allowed' : 'pointer', opacity: page === totalPages ? 0.5 : 1 }}>
-              Next
-            </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderTop: '1px solid #f3f4f6', background: '#fafafa', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '13px', color: '#666' }}>Show</span>
+            <select style={{ ...selectStyle, padding: '4px 8px' }} value={pageSize} onChange={e => handlePageSize(e.target.value)}>
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={100}>100</option>
+            </select>
+            <span style={{ fontSize: '13px', color: '#666' }}>per page</span>
           </div>
-        )}
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.5 : 1 }}>
+                Previous
+              </button>
+              <span style={{ fontSize: '13px', color: '#666' }}>Page {page} of {totalPages}</span>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', cursor: page === totalPages ? 'not-allowed' : 'pointer', opacity: page === totalPages ? 0.5 : 1 }}>
+                Next
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
