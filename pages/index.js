@@ -8,6 +8,9 @@ const supabase = createClient(
 
 const STONEBRIDGE_ORG_ID = '9b736a98-f0d3-4930-b377-83b9e30bb9e0'
 
+const NSSA = { light: '#8ECAEE', medium: '#1C80BC', dark: '#13405E' }
+const IRMAA = { light: '#ED8E8E', medium: '#DE5B63', dark: '#AF2A35' }
+
 export async function getServerSideProps() {
   const { data: progressData, error: progressError } = await supabase
     .from('advisor_progress')
@@ -76,8 +79,8 @@ function CourseColumns({ course }) {
 }
 
 function SortIcon({ col, sortCol, sortDir }) {
-  if (sortCol !== col) return <span style={{ color: '#ccc', marginLeft: 4 }}>↕</span>
-  return <span style={{ marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
+  if (sortCol !== col) return <span style={{ color: 'rgba(255,255,255,0.35)', marginLeft: 4, fontSize: 11 }}>↕</span>
+  return <span style={{ marginLeft: 4, fontSize: 11 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
 }
 
 function MetricBar({ value, total, color }) {
@@ -92,23 +95,46 @@ function MetricBar({ value, total, color }) {
 }
 
 const td = { padding: '12px 16px', fontSize: '13px' }
-const th = { padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 500, color: '#666', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }
 const selectStyle = { fontSize: '13px', padding: '6px 10px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white' }
+
+function thStyle(bg) {
+  return {
+    padding: '12px 16px',
+    textAlign: 'left',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: 'white',
+    cursor: 'pointer',
+    userSelect: 'none',
+    whiteSpace: 'nowrap',
+    background: bg
+  }
+}
 
 function matchesStatus(advisor, statusFilter, courseFilter) {
   if (statusFilter === 'all') return true
-
   const courses = []
   if (courseFilter === 'all' || courseFilter === 'nssa') { if (advisor.nssa) courses.push(advisor.nssa) }
   if (courseFilter === 'all' || courseFilter === 'irmaa') { if (advisor.irmaa) courses.push(advisor.irmaa) }
-
   if (courses.length === 0) return false
-
   if (statusFilter === 'certified') return courses.some(c => c.certified)
   if (statusFilter === 'needs-exam') return courses.some(c => c.pct_complete === 100 && !c.exam_purchased)
   if (statusFilter === 'in-progress') return courses.some(c => c.pct_complete > 0 && c.pct_complete < 100)
   if (statusFilter === 'not-started') return courses.some(c => c.pct_complete === 0)
   return true
+}
+
+function getSortValue(advisor, col) {
+  switch (col) {
+    case 'name': return advisor.name || advisor.email
+    case 'nssa-progress': return advisor.nssa?.pct_complete ?? -1
+    case 'nssa-exam': return advisor.nssa?.exam_passed ? 2 : advisor.nssa?.exam_purchased ? 1 : 0
+    case 'nssa-cert': return advisor.nssa?.certified ? 1 : 0
+    case 'irmaa-progress': return advisor.irmaa?.pct_complete ?? -1
+    case 'irmaa-exam': return advisor.irmaa?.exam_passed ? 2 : advisor.irmaa?.exam_purchased ? 1 : 0
+    case 'irmaa-cert': return advisor.irmaa?.certified ? 1 : 0
+    default: return ''
+  }
 }
 
 export default function Dashboard({ advisors }) {
@@ -138,16 +164,12 @@ export default function Dashboard({ advisors }) {
 
   const filtered = useMemo(() => {
     let list = [...advisors]
-
     if (courseFilter === 'nssa') list = list.filter(a => a.nssa)
     if (courseFilter === 'irmaa') list = list.filter(a => a.irmaa)
     list = list.filter(a => matchesStatus(a, statusFilter, courseFilter))
-
     list.sort((a, b) => {
-      let av, bv
-      if (sortCol === 'name') { av = a.name || a.email; bv = b.name || b.email }
-      else if (sortCol === 'nssa') { av = a.nssa?.pct_complete ?? -1; bv = b.nssa?.pct_complete ?? -1 }
-      else if (sortCol === 'irmaa') { av = a.irmaa?.pct_complete ?? -1; bv = b.irmaa?.pct_complete ?? -1 }
+      const av = getSortValue(a, sortCol)
+      const bv = getSortValue(b, sortCol)
       if (av < bv) return sortDir === 'asc' ? -1 : 1
       if (av > bv) return sortDir === 'asc' ? 1 : -1
       return 0
@@ -163,6 +185,16 @@ export default function Dashboard({ advisors }) {
     setPage(1)
   }
 
+  const cols = [
+    { key: 'name', label: 'Advisor', bg: '#1a1a1a', width: '22%' },
+    { key: 'nssa-progress', label: 'NSSA Progress', bg: NSSA.dark },
+    { key: 'nssa-exam', label: 'NSSA Exam', bg: NSSA.dark },
+    { key: 'nssa-cert', label: 'NSSA Cert', bg: NSSA.dark },
+    { key: 'irmaa-progress', label: 'IRMAACP Progress', bg: IRMAA.dark },
+    { key: 'irmaa-exam', label: 'IRMAACP Exam', bg: IRMAA.dark },
+    { key: 'irmaa-cert', label: 'IRMAACP Cert', bg: IRMAA.dark },
+  ]
+
   return (
     <div style={{ padding: '2rem', maxWidth: '1300px', margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
       <div style={{ marginBottom: '1.5rem' }}>
@@ -172,11 +204,11 @@ export default function Dashboard({ advisors }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '2rem' }}>
         {[
-          { label: 'Enrolled', value: advisors.length, sub: null, color: '#2563eb' },
-          { label: 'NSSA Certified', value: nssaCertified, sub: pct(nssaCertified, nssaEnrolled) + ' of NSSA enrolled', color: '#16a34a', barVal: nssaCertified, barTotal: nssaEnrolled },
-          { label: 'IRMAACP Certified', value: irmaaCertified, sub: pct(irmaaCertified, irmaaEnrolled) + ' of IRMAACP enrolled', color: '#16a34a', barVal: irmaaCertified, barTotal: irmaaEnrolled },
-          { label: 'NSSA Complete', value: nssaComplete, sub: pct(nssaComplete, nssaEnrolled) + ' of NSSA enrolled', color: '#2563eb', barVal: nssaComplete, barTotal: nssaEnrolled },
-          { label: 'IRMAACP Complete', value: irmaaComplete, sub: pct(irmaaComplete, irmaaEnrolled) + ' of IRMAACP enrolled', color: '#2563eb', barVal: irmaaComplete, barTotal: irmaaEnrolled },
+          { label: 'Enrolled', value: advisors.length, sub: null, color: '#555' },
+          { label: 'NSSA Certified', value: nssaCertified, sub: pct(nssaCertified, nssaEnrolled) + ' of NSSA enrolled', color: NSSA.medium, barVal: nssaCertified, barTotal: nssaEnrolled },
+          { label: 'IRMAACP Certified', value: irmaaCertified, sub: pct(irmaaCertified, irmaaEnrolled) + ' of IRMAACP enrolled', color: IRMAA.medium, barVal: irmaaCertified, barTotal: irmaaEnrolled },
+          { label: 'NSSA Complete', value: nssaComplete, sub: pct(nssaComplete, nssaEnrolled) + ' of NSSA enrolled', color: NSSA.medium, barVal: nssaComplete, barTotal: nssaEnrolled },
+          { label: 'IRMAACP Complete', value: irmaaComplete, sub: pct(irmaaComplete, irmaaEnrolled) + ' of IRMAACP enrolled', color: IRMAA.medium, barVal: irmaaComplete, barTotal: irmaaEnrolled },
           { label: 'Needs Exam', value: needsExam, sub: pct(needsExam, advisors.length) + ' of cohort', color: '#d97706', barVal: needsExam, barTotal: advisors.length }
         ].map(stat => (
           <div key={stat.label} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1rem' }}>
@@ -209,20 +241,17 @@ export default function Dashboard({ advisors }) {
       <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-              <th style={{ ...th, width: '22%' }} onClick={() => handleSort('name')}>
-                Advisor <SortIcon col="name" sortCol={sortCol} sortDir={sortDir} />
-              </th>
-              <th style={{ ...th, background: '#f0f4ff' }} onClick={() => handleSort('nssa')}>
-                NSSA Progress <SortIcon col="nssa" sortCol={sortCol} sortDir={sortDir} />
-              </th>
-              <th style={{ ...th, background: '#f0f4ff' }}>NSSA Exam</th>
-              <th style={{ ...th, background: '#f0f4ff' }}>NSSA Cert</th>
-              <th style={{ ...th, background: '#f0fff4' }} onClick={() => handleSort('irmaa')}>
-                IRMAACP Progress <SortIcon col="irmaa" sortCol={sortCol} sortDir={sortDir} />
-              </th>
-              <th style={{ ...th, background: '#f0fff4' }}>IRMAACP Exam</th>
-              <th style={{ ...th, background: '#f0fff4' }}>IRMAACP Cert</th>
+            <tr>
+              {cols.map(col => (
+                <th
+                  key={col.key}
+                  style={{ ...thStyle(col.bg), width: col.width }}
+                  onClick={() => handleSort(col.key)}
+                >
+                  {col.label}
+                  <SortIcon col={col.key} sortCol={sortCol} sortDir={sortDir} />
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
