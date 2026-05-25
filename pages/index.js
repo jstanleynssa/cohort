@@ -8,19 +8,11 @@ const supabase = createClient(
 export async function getServerSideProps() {
   const { data, error } = await supabase
     .from('progress')
-    .select(`
-      *,
-      members (
-        email,
-        first_name,
-        last_name,
-        org_id
-      )
-    `)
+    .select('*')
     .order('last_updated', { ascending: false })
 
   if (error) {
-    console.error(error)
+    console.error('Supabase error:', error)
     return { props: { data: [] } }
   }
 
@@ -31,6 +23,7 @@ export default function Dashboard({ data }) {
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <h1 style={{ marginBottom: '1.5rem' }}>Partner Dashboard</h1>
+      <p style={{ marginBottom: '1rem', color: '#666' }}>{data.length} records found</p>
       <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', borderRadius: '8px', overflow: 'hidden' }}>
         <thead>
           <tr style={{ background: '#f0f0f0' }}>
@@ -44,7 +37,7 @@ export default function Dashboard({ data }) {
         <tbody>
           {data.map((row) => (
             <tr key={row.id} style={{ borderTop: '1px solid #eee' }}>
-              <td style={{ padding: '12px' }}>{row.members?.email || row.email}</td>
+              <td style={{ padding: '12px' }}>{row.email}</td>
               <td style={{ padding: '12px' }}>{row.course}</td>
               <td style={{ padding: '12px' }}>{row.pct_complete}%</td>
               <td style={{ padding: '12px' }}>{row.exam_passed ? '✓ Passed' : row.exam_purchased ? 'Purchased' : '—'}</td>
