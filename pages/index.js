@@ -88,4 +88,28 @@ export default function Dashboard({ advisors }) {
                 <td style={{ padding: '12px 16px', fontSize: '13px' }}>
                   {advisor.nssa ? (
                     <StatusBadge
-                      pct={advisor.nssa
+                      pct={advisor.nssa.pct_complete}
+                      examPassed={advisor.nssa.exam_passed}
+                      certified={advisor.nssa.certified}
+                      examPurchased={advisor.nssa.exam_purchased}
+                    />
+                  ) : <span style={{ color: '#999' }}>Not enrolled</span>}
+                </td>
+                <td style={{ padding: '12px 16px', fontSize: '13px' }}>
+                  {advisor.irmaa ? (
+                    <StatusBadge
+                      pct={advisor.irmaa.pct_complete}
+                      examPassed={advisor.irmaa.exam_passed}
+                      certified={advisor.irmaa.certified}
+                      examPurchased={advisor.irmaa.exam_purchased}
+                    />
+                  ) : <span style={{ color: '#999' }}>Not enrolled</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
