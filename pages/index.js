@@ -26,25 +26,25 @@ export async function getServerSideProps() {
 
   const memberLookup = {}
   membersData.forEach(m => {
-    memberLookup[String(m.contact_id)] = m
+    memberLookup[m.email] = m
   })
 
   const advisorMap = {}
   progressData.forEach(p => {
-    if (!advisorMap[String(p.contact_id)]) {
-      const member = memberLookup[String(p.contact_id)]
+    if (!advisorMap[p.email]) {
+      const member = memberLookup[p.email]
       const fullName = member?.first_name && member?.last_name
         ? `${member.first_name} ${member.last_name}`
         : null
-      advisorMap[String(p.contact_id)] = {
+      advisorMap[p.email] = {
         name: fullName,
         email: p.email,
         nssa: null,
         irmaa: null
       }
     }
-    if (p.course === 'NSSA') advisorMap[String(p.contact_id)].nssa = p
-    if (p.course === 'IRMAA' || p.course === 'IRMAACP') advisorMap[String(p.contact_id)].irmaa = p
+    if (p.course === 'NSSA') advisorMap[p.email].nssa = p
+    if (p.course === 'IRMAA' || p.course === 'IRMAACP') advisorMap[p.email].irmaa = p
   })
 
   const advisors = Object.values(advisorMap)
