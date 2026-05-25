@@ -8,22 +8,36 @@ const supabase = createClient(
 const STONEBRIDGE_ORG_ID = '9b736a98-f0d3-4930-b377-83b9e30bb9e0'
 
 export async function getServerSideProps() {
-  const { data: progressData, error } = await supabase
+  const { data: progressData, error: progressError } = await supabase
     .from('progress')
     .select('*')
     .eq('org_id', STONEBRIDGE_ORG_ID)
     .order('email')
 
-  if (error) {
-    console.error('Error:', error)
+  const { data: membersData, error: membersError } = await supabase
+    .from('members')
+    .select('contact_id, first_name, last_name, email')
+    .eq('org_id', STONEBRIDGE_ORG_ID)
+
+  if (progressError || membersError) {
+    console.error('Error:', progressError || membersError)
     return { props: { advisors: [] } }
   }
+
+  const memberLookup = {}
+  membersData.forEach(m => {
+    memberLookup[m.contact_id] = m
+  })
 
   const advisorMap = {}
   progressData.forEach(p => {
     if (!advisorMap[p.contact_id]) {
+      const member = memberLookup[p.contact_id]
+      const fullName = member?.first_name && member?.last_name
+        ? `${member.first_name} ${member.last_name}`
+        : null
       advisorMap[p.contact_id] = {
-        name: p.email,
+        name: fullName,
         email: p.email,
         nssa: null,
         irmaa: null
@@ -113,10 +127,14 @@ export default function Dashboard({ advisors }) {
           <tbody>
             {advisors.map((advisor, i) => (
               <tr key={advisor.email} style={{ borderTop: i > 0 ? '1px solid #f3f4f6' : 'none' }}>
-                <td style={{ ...td }}>
-                  <p style={{ fontWeight: 500, fontSize: '14px', marginBottom: '2px' }}>{advisor.name}</p>
-                  <p style={{ fontSize: '12px', color: '#666' }}>{advisor.email}</p>
-                </td>
+               <td style={{ ...td }}>
+  <p style={{ fontWeight: 500, fontSize: '14px', marginBottom: '2px' }}>
+    {advisor.name || advisor.email}
+  </p>
+  {advisor.name && (
+    <p style={{ fontSize: '12px', color: '#666' }}>{advisor.email}</p>
+  )}
+</td>
                 <CourseColumns course={advisor.nssa} />
                 <CourseColumns course={advisor.irmaa} />
               </tr>
