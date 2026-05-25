@@ -37,19 +37,47 @@ export async function getServerSideProps() {
   return { props: { advisors } }
 }
 
-function StatusBadge({ pct, examPassed, certified, examPurchased }) {
+function ProgressBadge({ pct }) {
   if (pct === null || pct === undefined) return <span style={{ color: '#999' }}>—</span>
-  if (certified) return <span style={{ color: '#16a34a', fontWeight: 500 }}>✓ Certified</span>
-  if (examPassed) return <span style={{ color: '#16a34a' }}>✓ Passed</span>
-  if (pct === 100 && !examPurchased) return <span style={{ color: '#d97706', fontWeight: 500 }}>Needs exam</span>
-  if (pct === 100 && examPurchased) return <span style={{ color: '#2563eb' }}>Exam purchased</span>
+  if (pct === 100) return <span style={{ color: '#16a34a', fontWeight: 500 }}>Complete</span>
   if (pct > 0) return <span style={{ color: '#2563eb' }}>{pct}% complete</span>
   return <span style={{ color: '#dc2626' }}>Not started</span>
 }
 
+function ExamBadge({ purchased, passed }) {
+  if (passed) return <span style={{ color: '#16a34a', fontWeight: 500 }}>✓ Passed</span>
+  if (purchased) return <span style={{ color: '#2563eb' }}>Purchased</span>
+  return <span style={{ color: '#d97706' }}>Not purchased</span>
+}
+
+function CertBadge({ certified, certDate }) {
+  if (certified) return <span style={{ color: '#16a34a', fontWeight: 500 }}>✓ Certified</span>
+  return <span style={{ color: '#999' }}>—</span>
+}
+
+function CourseColumns({ course }) {
+  if (!course) return (
+    <>
+      <td style={td}><span style={{ color: '#999' }}>Not enrolled</span></td>
+      <td style={td}><span style={{ color: '#999' }}>—</span></td>
+      <td style={td}><span style={{ color: '#999' }}>—</span></td>
+    </>
+  )
+  return (
+    <>
+      <td style={td}><ProgressBadge pct={course.pct_complete} /></td>
+      <td style={td}><ExamBadge purchased={course.exam_purchased} passed={course.exam_passed} /></td>
+      <td style={td}><CertBadge certified={course.certified} /></td>
+    </>
+  )
+}
+
+const td = { padding: '12px 16px', fontSize: '13px' }
+const th = { padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 500, color: '#666' }
+
 export default function Dashboard({ advisors }) {
   return (
-    <div style={{ padding: '2rem', maxWidth: '1100px', margin: '0 auto' }}>
+    <div style={{ padding: '2rem', maxWidth: '1300px', margin: '0 auto' }}>
       <div style={{ marginBottom: '1.5rem' }}>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '4px' }}>Stonebridge Wealth</h1>
         <p style={{ color: '#666', fontSize: '14px' }}>{advisors.length} advisors enrolled</p>
@@ -73,38 +101,24 @@ export default function Dashboard({ advisors }) {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '13px', fontWeight: 500, color: '#666' }}>Advisor</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '13px', fontWeight: 500, color: '#666' }}>NSSA</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '13px', fontWeight: 500, color: '#666' }}>IRMAACP</th>
+              <th style={{ ...th, width: '22%' }}>Advisor</th>
+              <th style={{ ...th, background: '#f0f4ff' }}>NSSA Progress</th>
+              <th style={{ ...th, background: '#f0f4ff' }}>NSSA Exam</th>
+              <th style={{ ...th, background: '#f0f4ff' }}>NSSA Cert</th>
+              <th style={{ ...th, background: '#f0fff4' }}>IRMAACP Progress</th>
+              <th style={{ ...th, background: '#f0fff4' }}>IRMAACP Exam</th>
+              <th style={{ ...th, background: '#f0fff4' }}>IRMAACP Cert</th>
             </tr>
           </thead>
           <tbody>
             {advisors.map((advisor, i) => (
               <tr key={advisor.email} style={{ borderTop: i > 0 ? '1px solid #f3f4f6' : 'none' }}>
-                <td style={{ padding: '12px 16px' }}>
+                <td style={{ ...td }}>
                   <p style={{ fontWeight: 500, fontSize: '14px', marginBottom: '2px' }}>{advisor.name}</p>
                   <p style={{ fontSize: '12px', color: '#666' }}>{advisor.email}</p>
                 </td>
-                <td style={{ padding: '12px 16px', fontSize: '13px' }}>
-                  {advisor.nssa ? (
-                    <StatusBadge
-                      pct={advisor.nssa.pct_complete}
-                      examPassed={advisor.nssa.exam_passed}
-                      certified={advisor.nssa.certified}
-                      examPurchased={advisor.nssa.exam_purchased}
-                    />
-                  ) : <span style={{ color: '#999' }}>Not enrolled</span>}
-                </td>
-                <td style={{ padding: '12px 16px', fontSize: '13px' }}>
-                  {advisor.irmaa ? (
-                    <StatusBadge
-                      pct={advisor.irmaa.pct_complete}
-                      examPassed={advisor.irmaa.exam_passed}
-                      certified={advisor.irmaa.certified}
-                      examPurchased={advisor.irmaa.exam_purchased}
-                    />
-                  ) : <span style={{ color: '#999' }}>Not enrolled</span>}
-                </td>
+                <CourseColumns course={advisor.nssa} />
+                <CourseColumns course={advisor.irmaa} />
               </tr>
             ))}
           </tbody>
