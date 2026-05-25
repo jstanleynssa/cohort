@@ -26,25 +26,25 @@ export async function getServerSideProps() {
 
   const memberLookup = {}
   membersData.forEach(m => {
-    memberLookup[m.contact_id] = m
+    memberLookup[String(m.contact_id)] = m
   })
 
   const advisorMap = {}
   progressData.forEach(p => {
-    if (!advisorMap[p.contact_id]) {
-      const member = memberLookup[p.contact_id]
+    if (!advisorMap[String(p.contact_id)]) {
+      const member = memberLookup[String(p.contact_id)]
       const fullName = member?.first_name && member?.last_name
         ? `${member.first_name} ${member.last_name}`
         : null
-      advisorMap[p.contact_id] = {
+      advisorMap[String(p.contact_id)] = {
         name: fullName,
         email: p.email,
         nssa: null,
         irmaa: null
       }
     }
-    if (p.course === 'NSSA') advisorMap[p.contact_id].nssa = p
-    if (p.course === 'IRMAA' || p.course === 'IRMAACP') advisorMap[p.contact_id].irmaa = p
+    if (p.course === 'NSSA') advisorMap[String(p.contact_id)].nssa = p
+    if (p.course === 'IRMAA' || p.course === 'IRMAACP') advisorMap[String(p.contact_id)].irmaa = p
   })
 
   const advisors = Object.values(advisorMap)
@@ -64,7 +64,7 @@ function ExamBadge({ purchased, passed }) {
   return <span style={{ color: '#d97706' }}>Not purchased</span>
 }
 
-function CertBadge({ certified, certDate }) {
+function CertBadge({ certified }) {
   if (certified) return <span style={{ color: '#16a34a', fontWeight: 500 }}>✓ Certified</span>
   return <span style={{ color: '#999' }}>—</span>
 }
@@ -127,14 +127,14 @@ export default function Dashboard({ advisors }) {
           <tbody>
             {advisors.map((advisor, i) => (
               <tr key={advisor.email} style={{ borderTop: i > 0 ? '1px solid #f3f4f6' : 'none' }}>
-               <td style={{ ...td }}>
-  <p style={{ fontWeight: 500, fontSize: '14px', marginBottom: '2px' }}>
-    {advisor.name || advisor.email}
-  </p>
-  {advisor.name && (
-    <p style={{ fontSize: '12px', color: '#666' }}>{advisor.email}</p>
-  )}
-</td>
+                <td style={{ ...td }}>
+                  <p style={{ fontWeight: 500, fontSize: '14px', marginBottom: '2px' }}>
+                    {advisor.name || advisor.email}
+                  </p>
+                  {advisor.name && (
+                    <p style={{ fontSize: '12px', color: '#666' }}>{advisor.email}</p>
+                  )}
+                </td>
                 <CourseColumns course={advisor.nssa} />
                 <CourseColumns course={advisor.irmaa} />
               </tr>
