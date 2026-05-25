@@ -8,12 +8,11 @@ const supabase = createClient(
 const STONEBRIDGE_ORG_ID = '9b736a98-f0d3-4930-b377-83b9e30bb9e0'
 
 export async function getServerSideProps() {
-  const { data: progressData, error: progressError } = await supabase
-    .from('progress')
-    .select('*')
-    .eq('org_id', STONEBRIDGE_ORG_ID)
-    .order('email')
-
+const { data: progressData, error: progressError } = await supabase
+  .from('advisor_progress')
+  .select('*')
+  .eq('org_id', STONEBRIDGE_ORG_ID)
+  .order('email')
   const { data: membersData, error: membersError } = await supabase
     .from('members')
     .select('contact_id, first_name, last_name, email')
@@ -30,22 +29,21 @@ export async function getServerSideProps() {
   })
 
   const advisorMap = {}
-  progressData.forEach(p => {
-    if (!advisorMap[p.email]) {
-      const member = memberLookup[p.email]
-      const fullName = member?.first_name && member?.last_name
-        ? `${member.first_name} ${member.last_name}`
-        : null
-      advisorMap[p.email] = {
-        name: fullName,
-        email: p.email,
-        nssa: null,
-        irmaa: null
-      }
+progressData.forEach(p => {
+  if (!advisorMap[p.email]) {
+    const fullName = p.first_name && p.last_name
+      ? `${p.first_name} ${p.last_name}`
+      : null
+    advisorMap[p.email] = {
+      name: fullName,
+      email: p.email,
+      nssa: null,
+      irmaa: null
     }
-    if (p.course === 'NSSA') advisorMap[p.email].nssa = p
-    if (p.course === 'IRMAA' || p.course === 'IRMAACP') advisorMap[p.email].irmaa = p
-  })
+  }
+  if (p.course === 'NSSA') advisorMap[p.email].nssa = p
+  if (p.course === 'IRMAA' || p.course === 'IRMAACP') advisorMap[p.email].irmaa = p
+})
 
   const advisors = Object.values(advisorMap)
   return { props: { advisors } }
