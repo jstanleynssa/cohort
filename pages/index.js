@@ -82,4 +82,43 @@ export default function Dashboard({ advisors }) {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-              <th style={{ padding:
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '13px', fontWeight: 500, color: '#666' }}>Advisor</th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '13px', fontWeight: 500, color: '#666' }}>NSSA</th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '13px', fontWeight: 500, color: '#666' }}>IRMAACP</th>
+            </tr>
+          </thead>
+          <tbody>
+            {advisors.map((advisor, i) => (
+              <tr key={advisor.email} style={{ borderTop: i > 0 ? '1px solid #f3f4f6' : 'none' }}>
+                <td style={{ padding: '12px 16px' }}>
+                  <p style={{ fontWeight: 500, fontSize: '14px', marginBottom: '2px' }}>{advisor.name}</p>
+                  <p style={{ fontSize: '12px', color: '#666' }}>{advisor.email}</p>
+                </td>
+                <td style={{ padding: '12px 16px', fontSize: '13px' }}>
+                  {advisor.nssa ? (
+                    <StatusBadge
+                      pct={advisor.nssa.pct_complete}
+                      examPassed={advisor.nssa.exam_passed}
+                      certified={advisor.nssa.certified}
+                      examPurchased={advisor.nssa.exam_purchased}
+                    />
+                  ) : <span style={{ color: '#999' }}>Not enrolled</span>}
+                </td>
+                <td style={{ padding: '12px 16px', fontSize: '13px' }}>
+                  {advisor.irmaa ? (
+                    <StatusBadge
+                      pct={advisor.irmaa.pct_complete}
+                      examPassed={advisor.irmaa.exam_passed}
+                      certified={advisor.irmaa.certified}
+                      examPurchased={advisor.irmaa.exam_purchased}
+                    />
+                  ) : <span style={{ color: '#999' }}>Not enrolled</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
