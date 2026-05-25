@@ -8,21 +8,35 @@ const supabase = createClient(
 const STONEBRIDGE_ORG_ID = '9b736a98-f0d3-4930-b377-83b9e30bb9e0'
 
 export async function getServerSideProps() {
-  const { data: progressData, error: progressError } = await supabase
+  const { data: progressData, error } = await supabase
     .from('progress')
     .select('*')
     .eq('org_id', STONEBRIDGE_ORG_ID)
     .order('email')
 
-  const { data: membersData, error: membersError } = await supabase
-    .from('members')
-    .select('*')
-    .eq('org_id', STONEBRIDGE_ORG_ID)
-
-  if (progressError || membersError) {
-    console.error('Error:', progressError || membersError)
+  if (error) {
+    console.error('Error:', error)
     return { props: { advisors: [] } }
   }
+
+  // Group by contact_id
+  const advisorMap = {}
+  progressData.forEach(p => {
+    if (!advisorMap[p.contact_id]) {
+      advisorMap[p.contact_id] = {
+        name: p.email,
+        email: p.email,
+        nssa: null,
+        irmaa: null
+      }
+    }
+    if (p.course === 'NSSA') advisorMap[p.contact_id].nssa = p
+    if (p.course === 'IRMAA' || p.course === 'IRMAACP') advisorMap[p.contact_id].irmaa = p
+  })
+
+  const advisors = Object.values(advisorMap)
+  return { props: { advisors } }
+}
 
   // Group progress by contact_id
   const advisorMap = {}
