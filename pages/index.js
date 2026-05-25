@@ -19,7 +19,6 @@ export async function getServerSideProps() {
     return { props: { advisors: [] } }
   }
 
-  // Group by contact_id
   const advisorMap = {}
   progressData.forEach(p => {
     if (!advisorMap[p.contact_id]) {
@@ -38,30 +37,8 @@ export async function getServerSideProps() {
   return { props: { advisors } }
 }
 
-  // Group progress by contact_id
-  const advisorMap = {}
-  membersData.forEach(m => {
-    advisorMap[m.contact_id] = {
-      name: m.first_name && m.last_name ? `${m.first_name} ${m.last_name}` : m.email,
-      email: m.email,
-      nssa: null,
-      irmaa: null
-    }
-  })
-
-  progressData.forEach(p => {
-    if (!advisorMap[p.contact_id]) return
-    if (p.course === 'NSSA') advisorMap[p.contact_id].nssa = p
-    if (p.course === 'IRMAA' || p.course === 'IRMAACP') advisorMap[p.contact_id].irmaa = p
-  })
-
-  const advisors = Object.values(advisorMap)
-
-  return { props: { advisors } }
-}
-
 function StatusBadge({ pct, examPassed, certified, examPurchased }) {
-  if (!pct && pct !== 0) return <span style={{ color: '#999' }}>—</span>
+  if (pct === null || pct === undefined) return <span style={{ color: '#999' }}>—</span>
   if (certified) return <span style={{ color: '#16a34a', fontWeight: 500 }}>✓ Certified</span>
   if (examPassed) return <span style={{ color: '#16a34a' }}>✓ Passed</span>
   if (pct === 100 && !examPurchased) return <span style={{ color: '#d97706', fontWeight: 500 }}>Needs exam</span>
@@ -111,28 +88,4 @@ export default function Dashboard({ advisors }) {
                 <td style={{ padding: '12px 16px', fontSize: '13px' }}>
                   {advisor.nssa ? (
                     <StatusBadge
-                      pct={advisor.nssa.pct_complete}
-                      examPassed={advisor.nssa.exam_passed}
-                      certified={advisor.nssa.certified}
-                      examPurchased={advisor.nssa.exam_purchased}
-                    />
-                  ) : <span style={{ color: '#999' }}>Not enrolled</span>}
-                </td>
-                <td style={{ padding: '12px 16px', fontSize: '13px' }}>
-                  {advisor.irmaa ? (
-                    <StatusBadge
-                      pct={advisor.irmaa.pct_complete}
-                      examPassed={advisor.irmaa.exam_passed}
-                      certified={advisor.irmaa.certified}
-                      examPurchased={advisor.irmaa.exam_purchased}
-                    />
-                  ) : <span style={{ color: '#999' }}>Not enrolled</span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
+                      pct={advisor.nssa
