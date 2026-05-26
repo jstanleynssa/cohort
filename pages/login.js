@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
 import { useRouter } from 'next/router'
+import { createBrowserSupabaseClient } from '@supabase/auth-helpers-nextjs'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
+// Auth-helpers client syncs session to cookies automatically
+// so middleware can see the session immediately after sign-in
+const supabase = createBrowserSupabaseClient()
 
 export default function Login() {
   const router = useRouter()
@@ -23,7 +22,7 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        shouldCreateUser: false, // only allow existing users
+        shouldCreateUser: false,
       }
     })
 
@@ -41,18 +40,51 @@ export default function Login() {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       email,
       token,
       type: 'email',
     })
 
     if (error) {
+      console.error('[login] verifyOtp error:', error)
       setError(error.message)
       setLoading(false)
-    } else {
-      router.replace('/')
+      return
     }
+
+    if (!data?.session) {
+      console.error('[login] verifyOtp succeeded but no session returned:', data)
+      setError('Sign in succeeded but no session was created. Please try again.')
+      setLoading(false)
+      return
+    }
+
+    console.log('[login] Session established for:', data.session.user.email)
+    // Small delay to ensure cookie is written before middleware checks
+    await new Promise(resolve => setTimeout(resolve, 300))
+    router.replace('/')
+  }
+
+  const inputStyle = {
+    width: '100%',
+    padding: '10px 12px',
+    fontSize: '14px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    outline: 'none',
+    boxSizing: 'border-box'
+  }
+
+  const buttonStyle = {
+    width: '100%',
+    padding: '10px',
+    background: '#13405E',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '14px',
+    fontWeight: 500,
   }
 
   return (
@@ -100,15 +132,7 @@ export default function Login() {
                 onChange={e => setEmail(e.target.value)}
                 required
                 placeholder="you@company.com"
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  fontSize: '14px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
+                style={inputStyle}
               />
             </div>
             {error && (
@@ -117,18 +141,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading || !email}
-              style={{
-                width: '100%',
-                padding: '10px',
-                background: '#13405E',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '14px',
-                fontWeight: 500,
-                cursor: loading || !email ? 'not-allowed' : 'pointer',
-                opacity: loading || !email ? 0.6 : 1
-              }}
+              style={{ ...buttonStyle, cursor: loading || !email ? 'not-allowed' : 'pointer', opacity: loading || !email ? 0.6 : 1 }}
             >
               {loading ? 'Sending...' : 'Send login code'}
             </button>
@@ -149,17 +162,7 @@ export default function Login() {
                 required
                 placeholder="123456"
                 autoFocus
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  fontSize: '24px',
-                  letterSpacing: '0.5em',
-                  textAlign: 'center',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
+                style={{ ...inputStyle, fontSize: '24px', letterSpacing: '0.5em', textAlign: 'center' }}
               />
             </div>
             {error && (
@@ -168,35 +171,14 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading || token.length !== 6}
-              style={{
-                width: '100%',
-                padding: '10px',
-                background: '#13405E',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '14px',
-                fontWeight: 500,
-                cursor: loading || token.length !== 6 ? 'not-allowed' : 'pointer',
-                opacity: loading || token.length !== 6 ? 0.6 : 1
-              }}
+              style={{ ...buttonStyle, cursor: loading || token.length !== 6 ? 'not-allowed' : 'pointer', opacity: loading || token.length !== 6 ? 0.6 : 1 }}
             >
               {loading ? 'Verifying...' : 'Sign in'}
             </button>
             <button
               type="button"
               onClick={() => { setStep('email'); setToken(''); setError(null) }}
-              style={{
-                width: '100%',
-                padding: '10px',
-                background: 'transparent',
-                color: '#6b7280',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '13px',
-                cursor: 'pointer',
-                marginTop: '8px'
-              }}
+              style={{ width: '100%', padding: '10px', background: 'transparent', color: '#6b7280', border: 'none', fontSize: '13px', cursor: 'pointer', marginTop: '8px' }}
             >
               ← Use a different email
             </button>
