@@ -3,7 +3,6 @@ import { useState, useMemo } from 'react'
 import { createBrowserSupabaseClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/router'
 
-const STONEBRIDGE_ORG_ID = '9b736a98-f0d3-4930-b377-83b9e30bb9e0'
 const TRAINING_URL = 'https://www.nssapros.com/login'
 const ENROLLMENT_EMAIL = 'engage@nssapros.com'
 const NSSA = { medium: '#1C80BC', dark: '#13405E' }
@@ -134,11 +133,11 @@ function buildEnrollmentMailto(advisor, course, supervisorName, orgName) {
 }
 
 function buildBatchEnrollmentMailto(selectedAdvisors, course, supervisorName, orgName) {
-  const courseName = course === 'NSSA' ? 'NSSA® Social Security' : 'IRMAACP™ Medicare & IRMAA'
+  const courseName = course === 'NSSA' ? 'NSSA® Social Security'
+    : course === 'IRMAACP' ? 'IRMAACP™ Medicare & IRMAA'
+    : 'NSSA® / IRMAACP™'
   const subject = encodeURIComponent(`Enrollment Request: ${selectedAdvisors.length} Student${selectedAdvisors.length !== 1 ? 's' : ''} — ${courseName}`)
-  const studentList = selectedAdvisors.map(a =>
-    `  • ${a.name || a.email} (${a.email})`
-  ).join('\n')
+  const studentList = selectedAdvisors.map(a => `  • ${a.name || a.email} (${a.email})`).join('\n')
   const body = encodeURIComponent(
     `Hi NSSA Team,\n\n` +
     `${supervisorName ? supervisorName : 'I'} would like to request enrollment for the following ${selectedAdvisors.length} student${selectedAdvisors.length !== 1 ? 's' : ''} in the ${courseName} course:\n\n` +
@@ -155,6 +154,7 @@ function pct(num, den) {
   return Math.round((num / den) * 100) + '%'
 }
 
+// Nudge: show when course started but not complete (in progress), or not started
 function shouldShowNudge(courseData) {
   if (!courseData) return false
   if (courseData.certified) return false
@@ -163,12 +163,9 @@ function shouldShowNudge(courseData) {
   return true
 }
 
-// Show enrollment request when not enrolled OR exam not purchased
+// Enroll request: ONLY when not enrolled at all
 function shouldShowEnrollRequest(courseData) {
-  if (!courseData) return true // not enrolled
-  if (courseData.exam_purchased || courseData.exam_passed || courseData.certified) return false
-  if (courseData.pct_complete === 100) return true // complete but exam not purchased
-  return false
+  return !courseData
 }
 
 function ProgressBadge({ pct: p }) {
@@ -198,9 +195,7 @@ function NudgeButton({ advisor, course, supervisorName }) {
       display: 'inline-block', fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
       background: '#f3f4f6', color: '#374151', textDecoration: 'none',
       border: '1px solid #e5e7eb', marginTop: '4px', cursor: 'pointer'
-    }}>
-      ✉ Nudge
-    </a>
+    }}>✉ Nudge</a>
   )
 }
 
@@ -213,9 +208,7 @@ function EnrollButton({ advisor, course, supervisorName, orgName }) {
       display: 'inline-block', fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
       background: '#eff6ff', color: '#1d4ed8', textDecoration: 'none',
       border: '1px solid #bfdbfe', marginTop: '4px', cursor: 'pointer'
-    }}>
-      + Request Enrollment
-    </a>
+    }}>+ Request Enrollment</a>
   )
 }
 
@@ -238,7 +231,6 @@ function CourseColumns({ course, advisor, courseName, supervisorName, orgName })
         <ProgressBadge pct={course.pct_complete} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
           <NudgeButton advisor={advisor} course={courseName} supervisorName={supervisorName} />
-          <EnrollButton advisor={advisor} course={courseName} supervisorName={supervisorName} orgName={orgName} />
         </div>
       </td>
       <td style={td}><ExamBadge purchased={course.exam_purchased} passed={course.exam_passed} /></td>
@@ -276,17 +268,13 @@ function thStyle(bg) {
 function matchesStatus(advisor, statusFilter, courseFilter) {
   if (statusFilter === 'all') return true
 
-  const getCourse = (a, cf) => {
-    if (cf === 'nssa') return { data: a.nssa, enrolled: !!a.nssa }
-    if (cf === 'irmaa') return { data: a.irmaa, enrolled: !!a.irmaa }
-    return null
-  }
-
   if (courseFilter === 'nssa' || courseFilter === 'irmaa') {
-    const { data, enrolled } = getCourse(advisor, courseFilter)
+    const enrolled = courseFilter === 'nssa' ? !!advisor.nssa : !!advisor.irmaa
+    const data = courseFilter === 'nssa' ? advisor.nssa : advisor.irmaa
     if (statusFilter === 'not-enrolled') return !enrolled
     if (!enrolled) return false
     if (statusFilter === 'certified') return data.certified
+    if (statusFilter === 'not-certified') return !data.certified
     if (statusFilter === 'needs-exam') return data.pct_complete === 100 && !data.exam_purchased
     if (statusFilter === 'in-progress') return data.pct_complete > 0 && data.pct_complete < 100
     if (statusFilter === 'not-started') return data.pct_complete === 0
@@ -298,6 +286,7 @@ function matchesStatus(advisor, statusFilter, courseFilter) {
   if (statusFilter === 'not-enrolled') return !advisor.nssa && !advisor.irmaa
   if (courses.length === 0) return false
   if (statusFilter === 'certified') return courses.some(c => c.certified)
+  if (statusFilter === 'not-certified') return courses.some(c => !c.certified)
   if (statusFilter === 'needs-exam') return courses.some(c => c.pct_complete === 100 && !c.exam_purchased)
   if (statusFilter === 'in-progress') return courses.some(c => c.pct_complete > 0 && c.pct_complete < 100)
   if (statusFilter === 'not-started') return courses.some(c => c.pct_complete === 0)
@@ -338,11 +327,11 @@ function StatusKey() {
         ))}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '11px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '1px 6px', color: '#374151' }}>✉ Nudge</span>
-          <span style={{ fontSize: '12px', color: '#6b7280' }}>— Email the student to encourage progress</span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}>— Email the student to encourage progress on a course in progress</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '11px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '1px 6px', color: '#1d4ed8' }}>+ Request Enrollment</span>
-          <span style={{ fontSize: '12px', color: '#6b7280' }}>— Email NSSA to enroll this student in a course or exam</span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}>— Email NSSA to enroll this student in a course they haven't started</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '11px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '1px 6px', color: '#15803d' }}>⬆ Request Enrollment (selected)</span>
@@ -424,7 +413,6 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
         a.email.toLowerCase().includes(q)
       )
     }
-    // Course filter: nssa/irmaa only removes if not enrolled AND status isn't not-enrolled
     if (courseFilter === 'nssa' && statusFilter !== 'not-enrolled') list = list.filter(a => a.nssa)
     if (courseFilter === 'irmaa' && statusFilter !== 'not-enrolled') list = list.filter(a => a.irmaa)
     list = list.filter(a => matchesStatus(a, statusFilter, courseFilter))
@@ -441,7 +429,6 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
   const totalPages = Math.ceil(filtered.length / pageSize)
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize)
 
-  // Batch selection helpers
   const allPageSelected = paginated.length > 0 && paginated.every(a => selectedEmails.has(a.email))
   const someSelected = selectedEmails.size > 0
   const selectedAdvisors = filtered.filter(a => selectedEmails.has(a.email))
@@ -465,7 +452,6 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
     setSelectedEmails(next)
   }
 
-  // Determine which course to use for batch enrollment
   const batchCourse = courseFilter === 'nssa' ? 'NSSA' : courseFilter === 'irmaa' ? 'IRMAACP' : 'NSSA/IRMAACP'
   const batchEnrollHref = someSelected
     ? buildBatchEnrollmentMailto(selectedAdvisors, batchCourse, activeSupervisorName, activeOrgName)
@@ -475,17 +461,6 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
     setPageSize(Number(val))
     setPage(1)
   }
-
-  const cols = [
-    { key: 'select', label: '', bg: '#1a1a1a', width: '40px' },
-    { key: 'name', label: 'Student', bg: '#1a1a1a', width: '20%' },
-    { key: 'nssa-progress', label: 'NSSA Progress', bg: NSSA.dark },
-    { key: 'nssa-exam', label: 'NSSA Exam', bg: NSSA.dark },
-    { key: 'nssa-cert', label: 'NSSA Cert', bg: NSSA.dark },
-    { key: 'irmaa-progress', label: 'IRMAACP Progress', bg: IRMAA.dark },
-    { key: 'irmaa-exam', label: 'IRMAACP Exam', bg: IRMAA.dark },
-    { key: 'irmaa-cert', label: 'IRMAACP Cert', bg: IRMAA.dark },
-  ]
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
@@ -517,11 +492,10 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
       {isAdmin && (
         <div style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <label style={{ fontSize: '13px', fontWeight: 500, color: '#374151' }}>Viewing organization:</label>
-          <select style={{ ...selectStyle, minWidth: '240px' }} value={orgFilter} onChange={e => { setOrgFilter(e.target.value); setPage(1); setSelectedEmails(new Set()) }}>
+          <select style={{ ...selectStyle, minWidth: '240px' }} value={orgFilter}
+            onChange={e => { setOrgFilter(e.target.value); setPage(1); setSelectedEmails(new Set()) }}>
             <option value="all">All organizations</option>
-            {allPartners.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
+            {allPartners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>
       )}
@@ -545,7 +519,7 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
         ))}
       </div>
 
-      {/* Filters + batch action bar */}
+      {/* Filters + batch action */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <input
           type="text"
@@ -554,14 +528,17 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
           onChange={e => { setSearch(e.target.value); setPage(1) }}
           style={{ fontSize: '13px', padding: '6px 10px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', minWidth: '220px' }}
         />
-        <select style={selectStyle} value={courseFilter} onChange={e => { setCourseFilter(e.target.value); setPage(1); setSelectedEmails(new Set()) }}>
+        <select style={selectStyle} value={courseFilter}
+          onChange={e => { setCourseFilter(e.target.value); setPage(1); setSelectedEmails(new Set()) }}>
           <option value="all">All courses</option>
           <option value="nssa">NSSA only</option>
           <option value="irmaa">IRMAACP only</option>
         </select>
-        <select style={selectStyle} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); setSelectedEmails(new Set()) }}>
+        <select style={selectStyle} value={statusFilter}
+          onChange={e => { setStatusFilter(e.target.value); setPage(1); setSelectedEmails(new Set()) }}>
           <option value="all">All statuses</option>
           <option value="certified">Certified</option>
+          <option value="not-certified">Not certified</option>
           <option value="needs-exam">Needs exam</option>
           <option value="in-progress">In progress</option>
           <option value="not-started">Not started</option>
@@ -569,16 +546,11 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
         </select>
 
         {someSelected && (
-          <a
-            href={batchEnrollHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontSize: '13px', padding: '6px 14px', borderRadius: '6px',
-              background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0',
-              textDecoration: 'none', fontWeight: 500, whiteSpace: 'nowrap'
-            }}
-          >
+          <a href={batchEnrollHref} target="_blank" rel="noopener noreferrer" style={{
+            fontSize: '13px', padding: '6px 14px', borderRadius: '6px',
+            background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0',
+            textDecoration: 'none', fontWeight: 500, whiteSpace: 'nowrap'
+          }}>
             ⬆ Request Enrollment for {selectedEmails.size} selected
           </a>
         )}
@@ -593,22 +565,21 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
-              {/* Checkbox header */}
               <th style={{ ...thStyle('#1a1a1a'), width: '40px', cursor: 'default' }}>
-                <input
-                  type="checkbox"
-                  checked={allPageSelected}
-                  onChange={toggleSelectAll}
-                  style={{ cursor: 'pointer', width: 14, height: 14 }}
-                  title="Select all on this page"
-                />
+                <input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll}
+                  style={{ cursor: 'pointer', width: 14, height: 14 }} title="Select all on this page" />
               </th>
-              {cols.slice(1).map(col => (
-                <th
-                  key={col.key}
-                  style={{ ...thStyle(col.bg), width: col.width }}
-                  onClick={() => handleSort(col.key)}
-                >
+              {[
+                { key: 'name', label: 'Student', width: '20%' },
+                { key: 'nssa-progress', label: 'NSSA Progress', bg: NSSA.dark },
+                { key: 'nssa-exam', label: 'NSSA Exam', bg: NSSA.dark },
+                { key: 'nssa-cert', label: 'NSSA Cert', bg: NSSA.dark },
+                { key: 'irmaa-progress', label: 'IRMAACP Progress', bg: IRMAA.dark },
+                { key: 'irmaa-exam', label: 'IRMAACP Exam', bg: IRMAA.dark },
+                { key: 'irmaa-cert', label: 'IRMAACP Cert', bg: IRMAA.dark },
+              ].map(col => (
+                <th key={col.key} style={{ ...thStyle(col.bg || '#1a1a1a'), width: col.width }}
+                  onClick={() => handleSort(col.key)}>
                   {col.label}
                   <SortIcon col={col.key} sortCol={sortCol} sortDir={sortDir} />
                 </th>
@@ -617,22 +588,16 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
           </thead>
           <tbody>
             {paginated.map((advisor, i) => (
-              <tr
-                key={advisor.email}
-                style={{
-                  borderTop: i > 0 ? '1px solid #f3f4f6' : 'none',
-                  background: selectedEmails.has(advisor.email) ? '#f0fdf4' : 'white'
-                }}
-              >
+              <tr key={advisor.email} style={{
+                borderTop: i > 0 ? '1px solid #f3f4f6' : 'none',
+                background: selectedEmails.has(advisor.email) ? '#f0fdf4' : 'white'
+              }}>
                 <td style={{ ...td, textAlign: 'center' }}>
-                  <input
-                    type="checkbox"
-                    checked={selectedEmails.has(advisor.email)}
+                  <input type="checkbox" checked={selectedEmails.has(advisor.email)}
                     onChange={() => toggleSelect(advisor.email)}
-                    style={{ cursor: 'pointer', width: 14, height: 14 }}
-                  />
+                    style={{ cursor: 'pointer', width: 14, height: 14 }} />
                 </td>
-                <td style={{ ...td }}>
+                <td style={td}>
                   <p style={{ fontWeight: 500, fontSize: '14px', marginBottom: '2px' }}>{advisor.name || advisor.email}</p>
                   {advisor.name && <p style={{ fontSize: '12px', color: '#666' }}>{advisor.email}</p>}
                 </td>
@@ -663,9 +628,15 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
           </div>
           {totalPages > 1 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.5 : 1 }}>Previous</button>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.5 : 1 }}>
+                Previous
+              </button>
               <span style={{ fontSize: '13px', color: '#666' }}>Page {page} of {totalPages}</span>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', cursor: page === totalPages ? 'not-allowed' : 'pointer', opacity: page === totalPages ? 0.5 : 1 }}>Next</button>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', cursor: page === totalPages ? 'not-allowed' : 'pointer', opacity: page === totalPages ? 0.5 : 1 }}>
+                Next
+              </button>
             </div>
           )}
         </div>
