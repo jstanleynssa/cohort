@@ -1,21 +1,10 @@
-import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@supabase/auth-helpers-nextjs'
 import { useState, useMemo } from 'react'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
-
 const STONEBRIDGE_ORG_ID = '9b736a98-f0d3-4930-b377-83b9e30bb9e0'
-
-const NSSA = { light: '#8ECAEE', medium: '#1C80BC', dark: '#13405E' }
-const IRMAA = { light: '#ED8E8E', medium: '#DE5B63', dark: '#AF2A35' }
-
-const COURSE_LINKS = {
-  NSSA: 'https://www.nssapros.com/login',
-  IRMAACP: 'https://www.nssapros.com/login'
-}
+const TRAINING_URL = 'https://www.nssapros.com/login'
+const NSSA = { medium: '#1C80BC', dark: '#13405E' }
+const IRMAA = { medium: '#DE5B63', dark: '#AF2A35' }
 
 export async function getServerSideProps(context) {
   const supabaseServer = createServerSupabaseClient(context)
@@ -57,13 +46,10 @@ export async function getServerSideProps(context) {
   const advisorMap = {}
   progressData.forEach(p => {
     if (!advisorMap[p.email]) {
-      const fullName = p.first_name && p.last_name
-        ? `${p.first_name} ${p.last_name}`
-        : null
+      const fullName = p.first_name && p.last_name ? `${p.first_name} ${p.last_name}` : null
       advisorMap[p.email] = {
         name: fullName,
         email: p.email,
-        supervisor_name: p.supervisor_name || '',
         nssa: null,
         irmaa: null
       }
@@ -84,30 +70,20 @@ export async function getServerSideProps(context) {
 function buildNudgeMailto(advisor, course, supervisorName) {
   const courseData = course === 'NSSA' ? advisor.nssa : advisor.irmaa
   const firstName = advisor.name ? advisor.name.split(' ')[0] : advisor.email
-  const pct = courseData?.pct_complete ?? 0
-  const courseLink = COURSE_LINKS[course === 'NSSA' ? 'NSSA' : 'IRMAACP']
+  const progress = courseData?.pct_complete ?? 0
   const courseName = course === 'NSSA' ? 'NSSA® Social Security' : 'IRMAACP™ Medicare & IRMAA'
-
-  const progressText = pct === 0
-    ? `You haven't started the ${courseName} course yet`
-    : `You're currently ${pct}% through the ${courseName} course`
-
+  const progressText = progress === 0
+    ? `you have not yet started the ${courseName} course`
+    : `you are currently ${progress}% through the ${courseName} course`
   const subject = encodeURIComponent(`Your ${courseName} Training`)
   const body = encodeURIComponent(
-`Hi ${firstName},
-
-${supervisorName ? `${supervisorName} wanted to reach out` : 'We wanted to check in'} regarding your ${courseName} training progress.
-
-${progressText}. We'd love to see you make some progress — the certification will be a valuable addition to your practice and help you better serve your clients.
-
-Click here to continue your training:
-${courseLink}
-
-Please don't hesitate to reach out if you have any questions or need support.
-
-Best regards,
-${supervisorName || 'Your Training Coordinator'}`)
-
+    `Hi ${firstName},\n\n` +
+    `${supervisorName ? supervisorName + ' wanted to reach out' : 'We wanted to check in'} regarding your ${courseName} training. We noticed that ${progressText}.\n\n` +
+    `We would love to see you make some progress — the certification will be a valuable addition to your practice and help you better serve your clients.\n\n` +
+    `Click here to continue your training:\n${TRAINING_URL}\n\n` +
+    `Please don't hesitate to reach out if you have any questions or need support.\n\n` +
+    `Best regards,\n${supervisorName || 'Your Training Coordinator'}`
+  )
   return `mailto:${advisor.email}?subject=${subject}&body=${body}`
 }
 
@@ -137,9 +113,7 @@ function CertBadge({ certified }) {
 function NudgeButton({ advisor, course, supervisorName }) {
   const courseData = course === 'NSSA' ? advisor.nssa : advisor.irmaa
   if (!courseData || courseData.certified) return null
-
   const href = buildNudgeMailto(advisor, course, supervisorName)
-
   return (
     
       href={href}
@@ -312,13 +286,12 @@ export default function Dashboard({ advisors, orgName, supervisorName }) {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1300px', margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
-
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
         <div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '4px' }}>{orgName} Training Dashboard</h1>
           <p style={{ color: '#666', fontSize: '14px' }}>{advisors.length} students enrolled</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexShrink: 0, marginLeft: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, marginLeft: '2rem' }}>
           <img src="/nssa-irmaa-logos.png" alt="NSSA and IRMAACP logos" style={{ height: '60px', width: 'auto' }} />
         </div>
       </div>
