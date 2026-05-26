@@ -212,7 +212,7 @@ export default function Dashboard({ advisors }) {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
         <div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '4px' }}>Stonebridge Wealth Training Dashboard</h1>
-          <p style={{ color: '#666', fontSize: '14px' }}>{advisors.length} advisors enrolled</p>
+          <p style={{ color: '#666', fontSize: '14px' }}>{advisors.length} students enrolled</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexShrink: 0, marginLeft: '2rem' }}>
           <img src="/nssa-irmaa-logos.png" alt="NSSA and IRMAACP logos" style={{ height: '60px', width: 'auto' }} />
