@@ -1,6 +1,8 @@
 import { createServerSupabaseClient } from '@supabase/auth-helpers-nextjs'
 
 export async function getServerSideProps(context) {
+  console.log('Callback query params:', context.query)
+  console.log('Callback cookies:', context.req.headers.cookie)
   const supabaseServer = createServerSupabaseClient(context)
   const { code, token, type, token_hash } = context.query
 
