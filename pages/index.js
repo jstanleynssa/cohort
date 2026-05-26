@@ -5,6 +5,7 @@ import { useRouter } from 'next/router'
 
 const STONEBRIDGE_ORG_ID = '9b736a98-f0d3-4930-b377-83b9e30bb9e0'
 const TRAINING_URL = 'https://www.nssapros.com/login'
+const ENROLLMENT_EMAIL = 'engage@nssapros.com'
 const NSSA = { medium: '#1C80BC', dark: '#13405E' }
 const IRMAA = { medium: '#DE5B63', dark: '#AF2A35' }
 
@@ -26,7 +27,6 @@ export async function getServerSideProps(context) {
 
   const isAdmin = profile?.is_admin === true
 
-  // Fetch all partners for admin org filter
   let allPartners = []
   if (isAdmin) {
     const { data: partners } = await supabaseServer
@@ -38,7 +38,6 @@ export async function getServerSideProps(context) {
 
   const orgId = isAdmin ? null : profile?.org_id
 
-  // For non-admin, get their org partner info
   let partnerData = null
   if (!isAdmin && orgId) {
     const { data } = await supabaseServer
@@ -49,8 +48,6 @@ export async function getServerSideProps(context) {
     partnerData = data
   }
 
-  // For non-admin: fetch their org's progress
-  // For admin: fetch all progress (filtered client-side by org dropdown)
   let progressQuery = supabaseServer.from('advisor_progress').select('*').order('email')
   if (!isAdmin && orgId) {
     progressQuery = progressQuery.eq('org_id', orgId)
@@ -72,7 +69,6 @@ export async function getServerSideProps(context) {
     }
   }
 
-  // Build advisor map including org_id for admin filtering
   const advisorMap = {}
   progressData.forEach(p => {
     if (!advisorMap[p.email]) {
@@ -121,9 +117,58 @@ function buildNudgeMailto(advisor, course, supervisorName) {
   return `mailto:${advisor.email}?subject=${subject}&body=${body}`
 }
 
+function buildEnrollmentMailto(advisor, course, supervisorName, orgName) {
+  const courseName = course === 'NSSA' ? 'NSSA® Social Security' : 'IRMAACP™ Medicare & IRMAA'
+  const studentName = advisor.name || advisor.email
+  const subject = encodeURIComponent(`Enrollment Request: ${studentName} — ${courseName}`)
+  const body = encodeURIComponent(
+    `Hi NSSA Team,\n\n` +
+    `${supervisorName ? supervisorName : 'I'} would like to request enrollment for the following student in the ${courseName} course:\n\n` +
+    `Name: ${studentName}\n` +
+    `Email: ${advisor.email}\n` +
+    (orgName ? `Organization: ${orgName}\n` : '') +
+    `\nPlease let us know if you need any additional information.\n\n` +
+    `Best regards,\n${supervisorName || 'Training Coordinator'}`
+  )
+  return `mailto:${ENROLLMENT_EMAIL}?subject=${subject}&body=${body}`
+}
+
+function buildBatchEnrollmentMailto(selectedAdvisors, course, supervisorName, orgName) {
+  const courseName = course === 'NSSA' ? 'NSSA® Social Security' : 'IRMAACP™ Medicare & IRMAA'
+  const subject = encodeURIComponent(`Enrollment Request: ${selectedAdvisors.length} Student${selectedAdvisors.length !== 1 ? 's' : ''} — ${courseName}`)
+  const studentList = selectedAdvisors.map(a =>
+    `  • ${a.name || a.email} (${a.email})`
+  ).join('\n')
+  const body = encodeURIComponent(
+    `Hi NSSA Team,\n\n` +
+    `${supervisorName ? supervisorName : 'I'} would like to request enrollment for the following ${selectedAdvisors.length} student${selectedAdvisors.length !== 1 ? 's' : ''} in the ${courseName} course:\n\n` +
+    studentList + '\n\n' +
+    (orgName ? `Organization: ${orgName}\n\n` : '') +
+    `Please let us know if you need any additional information.\n\n` +
+    `Best regards,\n${supervisorName || 'Training Coordinator'}`
+  )
+  return `mailto:${ENROLLMENT_EMAIL}?subject=${subject}&body=${body}`
+}
+
 function pct(num, den) {
   if (!den) return '0%'
   return Math.round((num / den) * 100) + '%'
+}
+
+function shouldShowNudge(courseData) {
+  if (!courseData) return false
+  if (courseData.certified) return false
+  if (courseData.exam_passed) return false
+  if (courseData.pct_complete === 100) return false
+  return true
+}
+
+// Show enrollment request when not enrolled OR exam not purchased
+function shouldShowEnrollRequest(courseData) {
+  if (!courseData) return true // not enrolled
+  if (courseData.exam_purchased || courseData.exam_passed || courseData.certified) return false
+  if (courseData.pct_complete === 100) return true // complete but exam not purchased
+  return false
 }
 
 function ProgressBadge({ pct: p }) {
@@ -144,50 +189,45 @@ function CertBadge({ certified }) {
   return <span style={{ color: '#999' }}>—</span>
 }
 
-// Nudge should only show when there is actionable incompleteness:
-// - Course not started or in progress (not 100%)
-// - Course complete but exam not purchased
-// - Exam purchased but not passed
-// Never shows when certified
-function shouldShowNudge(courseData) {
-  if (!courseData) return false
-  if (courseData.certified) return false
-  if (courseData.exam_passed) return false
-  if (courseData.pct_complete === 100) return false  // course complete — no nudge needed
-  return true
-}
-
 function NudgeButton({ advisor, course, supervisorName }) {
   const courseData = course === 'NSSA' ? advisor.nssa : advisor.irmaa
   if (!shouldShowNudge(courseData)) return null
   const href = buildNudgeMailto(advisor, course, supervisorName)
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{
-        display: 'inline-block',
-        fontSize: '11px',
-        padding: '2px 8px',
-        borderRadius: '4px',
-        background: '#f3f4f6',
-        color: '#374151',
-        textDecoration: 'none',
-        border: '1px solid #e5e7eb',
-        marginTop: '4px',
-        cursor: 'pointer'
-      }}
-    >
+    <a href={href} target="_blank" rel="noopener noreferrer" style={{
+      display: 'inline-block', fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
+      background: '#f3f4f6', color: '#374151', textDecoration: 'none',
+      border: '1px solid #e5e7eb', marginTop: '4px', cursor: 'pointer'
+    }}>
       ✉ Nudge
     </a>
   )
 }
 
-function CourseColumns({ course, advisor, courseName, supervisorName }) {
+function EnrollButton({ advisor, course, supervisorName, orgName }) {
+  const courseData = course === 'NSSA' ? advisor.nssa : advisor.irmaa
+  if (!shouldShowEnrollRequest(courseData)) return null
+  const href = buildEnrollmentMailto(advisor, course, supervisorName, orgName)
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" style={{
+      display: 'inline-block', fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
+      background: '#eff6ff', color: '#1d4ed8', textDecoration: 'none',
+      border: '1px solid #bfdbfe', marginTop: '4px', cursor: 'pointer'
+    }}>
+      + Request Enrollment
+    </a>
+  )
+}
+
+function CourseColumns({ course, advisor, courseName, supervisorName, orgName }) {
   if (!course) return (
     <>
-      <td style={td}><span style={{ color: '#999' }}>Not enrolled</span></td>
+      <td style={td}>
+        <span style={{ color: '#999' }}>Not enrolled</span>
+        <div>
+          <EnrollButton advisor={advisor} course={courseName} supervisorName={supervisorName} orgName={orgName} />
+        </div>
+      </td>
       <td style={td}><span style={{ color: '#999' }}>—</span></td>
       <td style={td}><span style={{ color: '#999' }}>—</span></td>
     </>
@@ -196,8 +236,9 @@ function CourseColumns({ course, advisor, courseName, supervisorName }) {
     <>
       <td style={td}>
         <ProgressBadge pct={course.pct_complete} />
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
           <NudgeButton advisor={advisor} course={courseName} supervisorName={supervisorName} />
+          <EnrollButton advisor={advisor} course={courseName} supervisorName={supervisorName} orgName={orgName} />
         </div>
       </td>
       <td style={td}><ExamBadge purchased={course.exam_purchased} passed={course.exam_passed} /></td>
@@ -222,28 +263,39 @@ function MetricBar({ value, total, color }) {
   )
 }
 
-const td = { padding: '12px 16px', fontSize: '13px' }
+const td = { padding: '12px 16px', fontSize: '13px', verticalAlign: 'top' }
 const selectStyle = { fontSize: '13px', padding: '6px 10px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white' }
 
 function thStyle(bg) {
   return {
-    padding: '12px 16px',
-    textAlign: 'left',
-    fontSize: '12px',
-    fontWeight: 500,
-    color: 'white',
-    cursor: 'pointer',
-    userSelect: 'none',
-    whiteSpace: 'nowrap',
-    background: bg
+    padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 500,
+    color: 'white', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', background: bg
   }
 }
 
 function matchesStatus(advisor, statusFilter, courseFilter) {
   if (statusFilter === 'all') return true
-  const courses = []
-  if (courseFilter === 'all' || courseFilter === 'nssa') { if (advisor.nssa) courses.push(advisor.nssa) }
-  if (courseFilter === 'all' || courseFilter === 'irmaa') { if (advisor.irmaa) courses.push(advisor.irmaa) }
+
+  const getCourse = (a, cf) => {
+    if (cf === 'nssa') return { data: a.nssa, enrolled: !!a.nssa }
+    if (cf === 'irmaa') return { data: a.irmaa, enrolled: !!a.irmaa }
+    return null
+  }
+
+  if (courseFilter === 'nssa' || courseFilter === 'irmaa') {
+    const { data, enrolled } = getCourse(advisor, courseFilter)
+    if (statusFilter === 'not-enrolled') return !enrolled
+    if (!enrolled) return false
+    if (statusFilter === 'certified') return data.certified
+    if (statusFilter === 'needs-exam') return data.pct_complete === 100 && !data.exam_purchased
+    if (statusFilter === 'in-progress') return data.pct_complete > 0 && data.pct_complete < 100
+    if (statusFilter === 'not-started') return data.pct_complete === 0
+    return true
+  }
+
+  // All courses
+  const courses = [advisor.nssa, advisor.irmaa].filter(Boolean)
+  if (statusFilter === 'not-enrolled') return !advisor.nssa && !advisor.irmaa
   if (courses.length === 0) return false
   if (statusFilter === 'certified') return courses.some(c => c.certified)
   if (statusFilter === 'needs-exam') return courses.some(c => c.pct_complete === 100 && !c.exam_purchased)
@@ -266,28 +318,35 @@ function getSortValue(advisor, col) {
 }
 
 function StatusKey() {
-  const items = [
-    { color: '#16a34a', label: 'Complete / Passed / Certified', description: 'Student has fully completed this stage' },
-    { color: '#2563eb', label: 'In Progress / Purchased', description: 'Course partially complete, or exam purchased but not yet taken' },
-    { color: '#dc2626', label: 'Not Started / Not Purchased', description: 'No activity recorded for this stage' },
-    { color: '#999', label: '—', description: 'Not enrolled in this course' },
-  ]
   return (
     <div style={{ marginTop: '1.5rem', background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1rem 1.25rem' }}>
       <p style={{ fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status Key</p>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
-        {items.map(item => (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px' }}>
+        {[
+          { color: '#16a34a', dot: true, label: 'Complete / Passed / Certified', desc: 'Student has fully completed this stage' },
+          { color: '#2563eb', dot: true, label: 'In Progress / Purchased', desc: 'Course partially complete, or exam purchased but not yet taken' },
+          { color: '#dc2626', dot: true, label: 'Not Started / Not Purchased', desc: 'No activity recorded for this stage' },
+          { color: '#999', dot: false, label: '— Not enrolled', desc: 'Student has no record for this course' },
+        ].map(item => (
           <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: item.color, fontWeight: 600, fontSize: '13px', minWidth: 16 }}>{item.color === '#999' ? '—' : '●'}</span>
+            <span style={{ color: item.color, fontWeight: 600, fontSize: '13px', minWidth: 16 }}>{item.dot ? '●' : '—'}</span>
             <div>
               <span style={{ fontSize: '12px', fontWeight: 500, color: item.color }}>{item.label}</span>
-              <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '6px' }}>— {item.description}</span>
+              <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '6px' }}>— {item.desc}</span>
             </div>
           </div>
         ))}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '11px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '1px 6px', color: '#374151' }}>✉ Nudge</span>
-          <span style={{ fontSize: '12px', color: '#6b7280' }}>— Click to email this student and encourage progress</span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}>— Email the student to encourage progress</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '11px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '1px 6px', color: '#1d4ed8' }}>+ Request Enrollment</span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}>— Email NSSA to enroll this student in a course or exam</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '11px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '1px 6px', color: '#15803d' }}>⬆ Request Enrollment (selected)</span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}>— Batch email NSSA to enroll multiple selected students at once</span>
         </div>
       </div>
     </div>
@@ -305,6 +364,7 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
   const [pageSize, setPageSize] = useState(25)
   const [orgFilter, setOrgFilter] = useState('all')
   const [loggingOut, setLoggingOut] = useState(false)
+  const [selectedEmails, setSelectedEmails] = useState(new Set())
 
   async function handleLogout() {
     setLoggingOut(true)
@@ -312,13 +372,11 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
     router.replace('/login')
   }
 
-  // For admin: filter advisors by selected org
   const orgFilteredAdvisors = useMemo(() => {
     if (!isAdmin || orgFilter === 'all') return advisors
     return advisors.filter(a => a.org_id === orgFilter)
   }, [advisors, isAdmin, orgFilter])
 
-  // Derive org name for header
   const displayOrgName = useMemo(() => {
     if (!isAdmin) return orgName
     if (orgFilter === 'all') return 'Admin'
@@ -326,13 +384,19 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
     return partner ? partner.name : 'Admin'
   }, [isAdmin, orgFilter, allPartners, orgName])
 
-  // Derive supervisor name for nudge emails (admin viewing a specific org)
   const activeSupervisorName = useMemo(() => {
     if (!isAdmin) return supervisorName
     if (orgFilter === 'all') return ''
     const partner = allPartners.find(p => p.id === orgFilter)
     return partner?.contact_name || ''
   }, [isAdmin, orgFilter, allPartners, supervisorName])
+
+  const activeOrgName = useMemo(() => {
+    if (!isAdmin) return orgName
+    if (orgFilter === 'all') return ''
+    const partner = allPartners.find(p => p.id === orgFilter)
+    return partner?.name || ''
+  }, [isAdmin, orgFilter, allPartners, orgName])
 
   const nssaEnrolled = orgFilteredAdvisors.filter(a => a.nssa).length
   const irmaaEnrolled = orgFilteredAdvisors.filter(a => a.irmaa).length
@@ -360,8 +424,9 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
         a.email.toLowerCase().includes(q)
       )
     }
-    if (courseFilter === 'nssa') list = list.filter(a => a.nssa)
-    if (courseFilter === 'irmaa') list = list.filter(a => a.irmaa)
+    // Course filter: nssa/irmaa only removes if not enrolled AND status isn't not-enrolled
+    if (courseFilter === 'nssa' && statusFilter !== 'not-enrolled') list = list.filter(a => a.nssa)
+    if (courseFilter === 'irmaa' && statusFilter !== 'not-enrolled') list = list.filter(a => a.irmaa)
     list = list.filter(a => matchesStatus(a, statusFilter, courseFilter))
     list.sort((a, b) => {
       const av = getSortValue(a, sortCol)
@@ -376,13 +441,44 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
   const totalPages = Math.ceil(filtered.length / pageSize)
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize)
 
+  // Batch selection helpers
+  const allPageSelected = paginated.length > 0 && paginated.every(a => selectedEmails.has(a.email))
+  const someSelected = selectedEmails.size > 0
+  const selectedAdvisors = filtered.filter(a => selectedEmails.has(a.email))
+
+  function toggleSelectAll() {
+    if (allPageSelected) {
+      const next = new Set(selectedEmails)
+      paginated.forEach(a => next.delete(a.email))
+      setSelectedEmails(next)
+    } else {
+      const next = new Set(selectedEmails)
+      paginated.forEach(a => next.add(a.email))
+      setSelectedEmails(next)
+    }
+  }
+
+  function toggleSelect(email) {
+    const next = new Set(selectedEmails)
+    if (next.has(email)) next.delete(email)
+    else next.add(email)
+    setSelectedEmails(next)
+  }
+
+  // Determine which course to use for batch enrollment
+  const batchCourse = courseFilter === 'nssa' ? 'NSSA' : courseFilter === 'irmaa' ? 'IRMAACP' : 'NSSA/IRMAACP'
+  const batchEnrollHref = someSelected
+    ? buildBatchEnrollmentMailto(selectedAdvisors, batchCourse, activeSupervisorName, activeOrgName)
+    : '#'
+
   function handlePageSize(val) {
     setPageSize(Number(val))
     setPage(1)
   }
 
   const cols = [
-    { key: 'name', label: 'Student', bg: '#1a1a1a', width: '22%' },
+    { key: 'select', label: '', bg: '#1a1a1a', width: '40px' },
+    { key: 'name', label: 'Student', bg: '#1a1a1a', width: '20%' },
     { key: 'nssa-progress', label: 'NSSA Progress', bg: NSSA.dark },
     { key: 'nssa-exam', label: 'NSSA Exam', bg: NSSA.dark },
     { key: 'nssa-cert', label: 'NSSA Cert', bg: NSSA.dark },
@@ -392,7 +488,7 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
   ]
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1300px', margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
@@ -406,20 +502,11 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
           <img src="/nssa-irmaa-logos.png" alt="NSSA and IRMAACP logos" style={{ height: '50px', width: 'auto' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '12px', color: '#6b7280' }}>{userEmail}</span>
-            <button
-              onClick={handleLogout}
-              disabled={loggingOut}
-              style={{
-                fontSize: '12px',
-                padding: '4px 12px',
-                borderRadius: '6px',
-                border: '1px solid #d1d5db',
-                background: 'white',
-                color: '#374151',
-                cursor: loggingOut ? 'not-allowed' : 'pointer',
-                opacity: loggingOut ? 0.6 : 1
-              }}
-            >
+            <button onClick={handleLogout} disabled={loggingOut} style={{
+              fontSize: '12px', padding: '4px 12px', borderRadius: '6px',
+              border: '1px solid #d1d5db', background: 'white', color: '#374151',
+              cursor: loggingOut ? 'not-allowed' : 'pointer', opacity: loggingOut ? 0.6 : 1
+            }}>
               {loggingOut ? 'Signing out...' : 'Sign out'}
             </button>
           </div>
@@ -430,11 +517,7 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
       {isAdmin && (
         <div style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <label style={{ fontSize: '13px', fontWeight: 500, color: '#374151' }}>Viewing organization:</label>
-          <select
-            style={{ ...selectStyle, minWidth: '240px' }}
-            value={orgFilter}
-            onChange={e => { setOrgFilter(e.target.value); setPage(1) }}
-          >
+          <select style={{ ...selectStyle, minWidth: '240px' }} value={orgFilter} onChange={e => { setOrgFilter(e.target.value); setPage(1); setSelectedEmails(new Set()) }}>
             <option value="all">All organizations</option>
             {allPartners.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
@@ -446,7 +529,7 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
       {/* Metric cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '2rem' }}>
         {[
-          { label: 'Enrolled', value: orgFilteredAdvisors.length, sub: null, color: '#555' },
+          { label: 'Enrolled', value: orgFilteredAdvisors.length, color: '#555' },
           { label: 'NSSA Certified', value: nssaCertified, sub: pct(nssaCertified, nssaEnrolled) + ' of NSSA enrolled', color: NSSA.medium, barVal: nssaCertified, barTotal: nssaEnrolled },
           { label: 'IRMAACP Certified', value: irmaaCertified, sub: pct(irmaaCertified, irmaaEnrolled) + ' of IRMAACP enrolled', color: IRMAA.medium, barVal: irmaaCertified, barTotal: irmaaEnrolled },
           { label: 'NSSA Complete', value: nssaComplete, sub: pct(nssaComplete, nssaEnrolled) + ' of NSSA enrolled', color: NSSA.medium, barVal: nssaComplete, barTotal: nssaEnrolled },
@@ -462,7 +545,7 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
         ))}
       </div>
 
-      {/* Filters */}
+      {/* Filters + batch action bar */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <input
           type="text"
@@ -471,18 +554,35 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
           onChange={e => { setSearch(e.target.value); setPage(1) }}
           style={{ fontSize: '13px', padding: '6px 10px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', minWidth: '220px' }}
         />
-        <select style={selectStyle} value={courseFilter} onChange={e => { setCourseFilter(e.target.value); setPage(1) }}>
+        <select style={selectStyle} value={courseFilter} onChange={e => { setCourseFilter(e.target.value); setPage(1); setSelectedEmails(new Set()) }}>
           <option value="all">All courses</option>
           <option value="nssa">NSSA only</option>
           <option value="irmaa">IRMAACP only</option>
         </select>
-        <select style={selectStyle} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1) }}>
+        <select style={selectStyle} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); setSelectedEmails(new Set()) }}>
           <option value="all">All statuses</option>
           <option value="certified">Certified</option>
           <option value="needs-exam">Needs exam</option>
           <option value="in-progress">In progress</option>
           <option value="not-started">Not started</option>
+          <option value="not-enrolled">Not enrolled</option>
         </select>
+
+        {someSelected && (
+          <a
+            href={batchEnrollHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: '13px', padding: '6px 14px', borderRadius: '6px',
+              background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0',
+              textDecoration: 'none', fontWeight: 500, whiteSpace: 'nowrap'
+            }}
+          >
+            ⬆ Request Enrollment for {selectedEmails.size} selected
+          </a>
+        )}
+
         <span style={{ fontSize: '13px', color: '#666', marginLeft: 'auto' }}>
           {filtered.length} student{filtered.length !== 1 ? 's' : ''} shown
         </span>
@@ -493,7 +593,17 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
-              {cols.map(col => (
+              {/* Checkbox header */}
+              <th style={{ ...thStyle('#1a1a1a'), width: '40px', cursor: 'default' }}>
+                <input
+                  type="checkbox"
+                  checked={allPageSelected}
+                  onChange={toggleSelectAll}
+                  style={{ cursor: 'pointer', width: 14, height: 14 }}
+                  title="Select all on this page"
+                />
+              </th>
+              {cols.slice(1).map(col => (
                 <th
                   key={col.key}
                   style={{ ...thStyle(col.bg), width: col.width }}
@@ -507,18 +617,32 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
           </thead>
           <tbody>
             {paginated.map((advisor, i) => (
-              <tr key={advisor.email} style={{ borderTop: i > 0 ? '1px solid #f3f4f6' : 'none' }}>
+              <tr
+                key={advisor.email}
+                style={{
+                  borderTop: i > 0 ? '1px solid #f3f4f6' : 'none',
+                  background: selectedEmails.has(advisor.email) ? '#f0fdf4' : 'white'
+                }}
+              >
+                <td style={{ ...td, textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedEmails.has(advisor.email)}
+                    onChange={() => toggleSelect(advisor.email)}
+                    style={{ cursor: 'pointer', width: 14, height: 14 }}
+                  />
+                </td>
                 <td style={{ ...td }}>
                   <p style={{ fontWeight: 500, fontSize: '14px', marginBottom: '2px' }}>{advisor.name || advisor.email}</p>
                   {advisor.name && <p style={{ fontSize: '12px', color: '#666' }}>{advisor.email}</p>}
                 </td>
-                <CourseColumns course={advisor.nssa} advisor={advisor} courseName="NSSA" supervisorName={activeSupervisorName} />
-                <CourseColumns course={advisor.irmaa} advisor={advisor} courseName="IRMAACP" supervisorName={activeSupervisorName} />
+                <CourseColumns course={advisor.nssa} advisor={advisor} courseName="NSSA" supervisorName={activeSupervisorName} orgName={activeOrgName} />
+                <CourseColumns course={advisor.irmaa} advisor={advisor} courseName="IRMAACP" supervisorName={activeSupervisorName} orgName={activeOrgName} />
               </tr>
             ))}
             {paginated.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: '#999', fontSize: '13px' }}>
+                <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: '#999', fontSize: '13px' }}>
                   No students match the current filters
                 </td>
               </tr>
@@ -547,9 +671,7 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
         </div>
       </div>
 
-      {/* Status key */}
       <StatusKey />
-
     </div>
   )
 }
