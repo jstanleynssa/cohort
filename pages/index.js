@@ -46,14 +46,14 @@ function pct(num, den) {
 function ProgressBadge({ pct: p }) {
   if (p === null || p === undefined) return <span style={{ color: '#999' }}>—</span>
   if (p === 100) return <span style={{ color: '#16a34a', fontWeight: 500 }}>Complete</span>
-  if (p > 0) return <span style={{ color: '#2563eb' }}>{p}% complete</span>
+  if (p > 0) return <span style={{ color: '#6acf73' }}>{p}% complete</span>
   return <span style={{ color: '#dc2626' }}>Not started</span>
 }
 
 function ExamBadge({ purchased, passed }) {
   if (passed) return <span style={{ color: '#16a34a', fontWeight: 500 }}>✓ Passed</span>
   if (purchased) return <span style={{ color: '#2563eb' }}>Purchased</span>
-  return <span style={{ color: '#d97706' }}>Not purchased</span>
+  return <span style={{ color: '#999' }}>Not purchased</span>
 }
 
 function CertBadge({ certified }) {
@@ -209,7 +209,7 @@ export default function Dashboard({ advisors }) {
           { label: 'IRMAACP Certified', value: irmaaCertified, sub: pct(irmaaCertified, irmaaEnrolled) + ' of IRMAACP enrolled', color: IRMAA.medium, barVal: irmaaCertified, barTotal: irmaaEnrolled },
           { label: 'NSSA Complete', value: nssaComplete, sub: pct(nssaComplete, nssaEnrolled) + ' of NSSA enrolled', color: NSSA.medium, barVal: nssaComplete, barTotal: nssaEnrolled },
           { label: 'IRMAACP Complete', value: irmaaComplete, sub: pct(irmaaComplete, irmaaEnrolled) + ' of IRMAACP enrolled', color: IRMAA.medium, barVal: irmaaComplete, barTotal: irmaaEnrolled },
-          { label: 'Needs Exam', value: needsExam, sub: pct(needsExam, advisors.length) + ' of cohort', color: '#d97706', barVal: needsExam, barTotal: advisors.length }
+        { label: 'Needs Exam', value: needsExam, sub: pct(needsExam, advisors.length) + ' of cohort', color: '#6b7280', barVal: needsExam, barTotal: advisors.length }
         ].map(stat => (
           <div key={stat.label} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1rem' }}>
             <p style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>{stat.label}</p>
