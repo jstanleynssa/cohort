@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createServerSupabaseClient } from '@supabase/auth-helpers-nextjs'
 import { useState, useMemo } from 'react'
 
 const supabase = createClient(
@@ -11,16 +12,41 @@ const STONEBRIDGE_ORG_ID = '9b736a98-f0d3-4930-b377-83b9e30bb9e0'
 const NSSA = { light: '#8ECAEE', medium: '#1C80BC', dark: '#13405E' }
 const IRMAA = { light: '#ED8E8E', medium: '#DE5B63', dark: '#AF2A35' }
 
-export async function getServerSideProps() {
-  const { data: progressData, error: progressError } = await supabase
+export async function getServerSideProps(context) {
+  const supabaseServer = createServerSupabaseClient(context)
+  const { data: { session } } = await supabaseServer.auth.getSession()
+
+  if (!session) {
+    return { redirect: { destination: '/login', permanent: false } }
+  }
+
+  const { data: profile } = await supabaseServer
+    .from('user_profiles')
+    .select('*')
+    .eq('id', session.user.id)
+    .single()
+
+  const orgId = profile?.is_admin ? STONEBRIDGE_ORG_ID : profile?.org_id
+
+  if (!orgId) {
+    return { props: { advisors: [], orgName: 'No organization assigned' } }
+  }
+
+  const { data: partnerData } = await supabaseServer
+    .from('partners')
+    .select('name')
+    .eq('id', orgId)
+    .single()
+
+  const { data: progressData, error: progressError } = await supabaseServer
     .from('advisor_progress')
     .select('*')
-    .eq('org_id', STONEBRIDGE_ORG_ID)
+    .eq('org_id', orgId)
     .order('email')
 
   if (progressError) {
     console.error('Error:', progressError)
-    return { props: { advisors: [] } }
+    return { props: { advisors: [], orgName: partnerData?.name || '' } }
   }
 
   const advisorMap = {}
@@ -35,7 +61,12 @@ export async function getServerSideProps() {
     if (p.course === 'IRMAA' || p.course === 'IRMAACP') advisorMap[p.email].irmaa = p
   })
 
-  return { props: { advisors: Object.values(advisorMap) } }
+  return {
+    props: {
+      advisors: Object.values(advisorMap),
+      orgName: partnerData?.name || 'Dashboard'
+    }
+  }
 }
 
 function pct(num, den) {
@@ -137,7 +168,7 @@ function getSortValue(advisor, col) {
   }
 }
 
-export default function Dashboard({ advisors }) {
+export default function Dashboard({ advisors, orgName }) {
   const [search, setSearch] = useState('')
   const [courseFilter, setCourseFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -165,7 +196,6 @@ export default function Dashboard({ advisors }) {
 
   const filtered = useMemo(() => {
     let list = [...advisors]
-
     if (search) {
       const q = search.toLowerCase()
       list = list.filter(a =>
@@ -173,11 +203,9 @@ export default function Dashboard({ advisors }) {
         a.email.toLowerCase().includes(q)
       )
     }
-
     if (courseFilter === 'nssa') list = list.filter(a => a.nssa)
     if (courseFilter === 'irmaa') list = list.filter(a => a.irmaa)
     list = list.filter(a => matchesStatus(a, statusFilter, courseFilter))
-
     list.sort((a, b) => {
       const av = getSortValue(a, sortCol)
       const bv = getSortValue(b, sortCol)
@@ -211,7 +239,7 @@ export default function Dashboard({ advisors }) {
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
         <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '4px' }}>Stonebridge Wealth Training Dashboard</h1>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '4px' }}>{orgName} Training Dashboard</h1>
           <p style={{ color: '#666', fontSize: '14px' }}>{advisors.length} students enrolled</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexShrink: 0, marginLeft: '2rem' }}>
