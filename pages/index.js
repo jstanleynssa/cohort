@@ -12,6 +12,11 @@ const STONEBRIDGE_ORG_ID = '9b736a98-f0d3-4930-b377-83b9e30bb9e0'
 const NSSA = { light: '#8ECAEE', medium: '#1C80BC', dark: '#13405E' }
 const IRMAA = { light: '#ED8E8E', medium: '#DE5B63', dark: '#AF2A35' }
 
+const COURSE_LINKS = {
+  NSSA: 'https://www.nssapros.com/login',
+  IRMAACP: 'https://www.nssapros.com/login'
+}
+
 export async function getServerSideProps(context) {
   const supabaseServer = createServerSupabaseClient(context)
   const { data: { session } } = await supabaseServer.auth.getSession()
@@ -29,12 +34,12 @@ export async function getServerSideProps(context) {
   const orgId = profile?.is_admin ? STONEBRIDGE_ORG_ID : profile?.org_id
 
   if (!orgId) {
-    return { props: { advisors: [], orgName: 'No organization assigned' } }
+    return { props: { advisors: [], orgName: 'No organization assigned', supervisorName: '' } }
   }
 
   const { data: partnerData } = await supabaseServer
     .from('partners')
-    .select('name')
+    .select('name, contact_name')
     .eq('id', orgId)
     .single()
 
@@ -46,7 +51,7 @@ export async function getServerSideProps(context) {
 
   if (progressError) {
     console.error('Error:', progressError)
-    return { props: { advisors: [], orgName: partnerData?.name || '' } }
+    return { props: { advisors: [], orgName: partnerData?.name || '', supervisorName: '' } }
   }
 
   const advisorMap = {}
@@ -55,7 +60,13 @@ export async function getServerSideProps(context) {
       const fullName = p.first_name && p.last_name
         ? `${p.first_name} ${p.last_name}`
         : null
-      advisorMap[p.email] = { name: fullName, email: p.email, nssa: null, irmaa: null }
+      advisorMap[p.email] = {
+        name: fullName,
+        email: p.email,
+        supervisor_name: p.supervisor_name || '',
+        nssa: null,
+        irmaa: null
+      }
     }
     if (p.course === 'NSSA') advisorMap[p.email].nssa = p
     if (p.course === 'IRMAA' || p.course === 'IRMAACP') advisorMap[p.email].irmaa = p
@@ -64,9 +75,40 @@ export async function getServerSideProps(context) {
   return {
     props: {
       advisors: Object.values(advisorMap),
-      orgName: partnerData?.name || 'Dashboard'
+      orgName: partnerData?.name || 'Dashboard',
+      supervisorName: partnerData?.contact_name || ''
     }
   }
+}
+
+function buildNudgeMailto(advisor, course, supervisorName) {
+  const courseData = course === 'NSSA' ? advisor.nssa : advisor.irmaa
+  const firstName = advisor.name ? advisor.name.split(' ')[0] : advisor.email
+  const pct = courseData?.pct_complete ?? 0
+  const courseLink = COURSE_LINKS[course === 'NSSA' ? 'NSSA' : 'IRMAACP']
+  const courseName = course === 'NSSA' ? 'NSSA® Social Security' : 'IRMAACP™ Medicare & IRMAA'
+
+  const progressText = pct === 0
+    ? `You haven't started the ${courseName} course yet`
+    : `You're currently ${pct}% through the ${courseName} course`
+
+  const subject = encodeURIComponent(`Your ${courseName} Training`)
+  const body = encodeURIComponent(
+`Hi ${firstName},
+
+${supervisorName ? `${supervisorName} wanted to reach out` : 'We wanted to check in'} regarding your ${courseName} training progress.
+
+${progressText}. We'd love to see you make some progress — the certification will be a valuable addition to your practice and help you better serve your clients.
+
+Click here to continue your training:
+${courseLink}
+
+Please don't hesitate to reach out if you have any questions or need support.
+
+Best regards,
+${supervisorName || 'Your Training Coordinator'}`)
+
+  return `mailto:${advisor.email}?subject=${subject}&body=${body}`
 }
 
 function pct(num, den) {
@@ -92,7 +134,34 @@ function CertBadge({ certified }) {
   return <span style={{ color: '#999' }}>—</span>
 }
 
-function CourseColumns({ course }) {
+function NudgeButton({ advisor, course, supervisorName }) {
+  const courseData = course === 'NSSA' ? advisor.nssa : advisor.irmaa
+  if (!courseData || courseData.certified) return null
+
+  return (
+    
+      href={buildNudgeMailto(advisor, course, supervisorName)}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        display: 'inline-block',
+        fontSize: '11px',
+        padding: '2px 8px',
+        borderRadius: '4px',
+        background: '#f3f4f6',
+        color: '#374151',
+        textDecoration: 'none',
+        border: '1px solid #e5e7eb',
+        marginTop: '4px',
+        cursor: 'pointer'
+      }}
+    >
+      ✉ Nudge
+    </a>
+  )
+}
+
+function CourseColumns({ course, advisor, courseName, supervisorName }) {
   if (!course) return (
     <>
       <td style={td}><span style={{ color: '#999' }}>Not enrolled</span></td>
@@ -102,7 +171,12 @@ function CourseColumns({ course }) {
   )
   return (
     <>
-      <td style={td}><ProgressBadge pct={course.pct_complete} /></td>
+      <td style={td}>
+        <ProgressBadge pct={course.pct_complete} />
+        <div>
+          <NudgeButton advisor={advisor} course={courseName} supervisorName={supervisorName} />
+        </div>
+      </td>
       <td style={td}><ExamBadge purchased={course.exam_purchased} passed={course.exam_passed} /></td>
       <td style={td}><CertBadge certified={course.certified} /></td>
     </>
@@ -168,7 +242,7 @@ function getSortValue(advisor, col) {
   }
 }
 
-export default function Dashboard({ advisors, orgName }) {
+export default function Dashboard({ advisors, orgName, supervisorName }) {
   const [search, setSearch] = useState('')
   const [courseFilter, setCourseFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -313,8 +387,8 @@ export default function Dashboard({ advisors, orgName }) {
                   <p style={{ fontWeight: 500, fontSize: '14px', marginBottom: '2px' }}>{advisor.name || advisor.email}</p>
                   {advisor.name && <p style={{ fontSize: '12px', color: '#666' }}>{advisor.email}</p>}
                 </td>
-                <CourseColumns course={advisor.nssa} />
-                <CourseColumns course={advisor.irmaa} />
+                <CourseColumns course={advisor.nssa} advisor={advisor} courseName="NSSA" supervisorName={supervisorName} />
+                <CourseColumns course={advisor.irmaa} advisor={advisor} courseName="IRMAACP" supervisorName={supervisorName} />
               </tr>
             ))}
             {paginated.length === 0 && (
