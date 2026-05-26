@@ -138,6 +138,7 @@ function getSortValue(advisor, col) {
 }
 
 export default function Dashboard({ advisors }) {
+  const [search, setSearch] = useState('')
   const [courseFilter, setCourseFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [sortCol, setSortCol] = useState('name')
@@ -164,9 +165,19 @@ export default function Dashboard({ advisors }) {
 
   const filtered = useMemo(() => {
     let list = [...advisors]
+
+    if (search) {
+      const q = search.toLowerCase()
+      list = list.filter(a =>
+        (a.name && a.name.toLowerCase().includes(q)) ||
+        a.email.toLowerCase().includes(q)
+      )
+    }
+
     if (courseFilter === 'nssa') list = list.filter(a => a.nssa)
     if (courseFilter === 'irmaa') list = list.filter(a => a.irmaa)
     list = list.filter(a => matchesStatus(a, statusFilter, courseFilter))
+
     list.sort((a, b) => {
       const av = getSortValue(a, sortCol)
       const bv = getSortValue(b, sortCol)
@@ -175,7 +186,7 @@ export default function Dashboard({ advisors }) {
       return 0
     })
     return list
-  }, [advisors, courseFilter, statusFilter, sortCol, sortDir])
+  }, [advisors, search, courseFilter, statusFilter, sortCol, sortDir])
 
   const totalPages = Math.ceil(filtered.length / pageSize)
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize)
@@ -186,7 +197,7 @@ export default function Dashboard({ advisors }) {
   }
 
   const cols = [
-    { key: 'name', label: 'Advisor', bg: '#1a1a1a', width: '22%' },
+    { key: 'name', label: 'Student', bg: '#1a1a1a', width: '22%' },
     { key: 'nssa-progress', label: 'NSSA Progress', bg: NSSA.dark },
     { key: 'nssa-exam', label: 'NSSA Exam', bg: NSSA.dark },
     { key: 'nssa-cert', label: 'NSSA Cert', bg: NSSA.dark },
@@ -197,15 +208,16 @@ export default function Dashboard({ advisors }) {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1300px', margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
-<div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-  <div>
-    <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '4px' }}>Stonebridge Wealth Training Dashboard</h1>
-    <p style={{ color: '#666', fontSize: '14px' }}>{advisors.length} advisors enrolled</p>
-  </div>
-  <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexShrink: 0, marginLeft: '2rem' }}>
-    <img src="/nssa-irmaa-logos.png" alt="NSSA and IRMAACP logos" style={{ height: '60px', width: 'auto' }} />
-  </div>
-</div>
+
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+        <div>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '4px' }}>Stonebridge Wealth Training Dashboard</h1>
+          <p style={{ color: '#666', fontSize: '14px' }}>{advisors.length} advisors enrolled</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexShrink: 0, marginLeft: '2rem' }}>
+          <img src="/nssa-irmaa-logos.png" alt="NSSA and IRMAACP logos" style={{ height: '60px', width: 'auto' }} />
+        </div>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '2rem' }}>
         {[
@@ -214,7 +226,7 @@ export default function Dashboard({ advisors }) {
           { label: 'IRMAACP Certified', value: irmaaCertified, sub: pct(irmaaCertified, irmaaEnrolled) + ' of IRMAACP enrolled', color: IRMAA.medium, barVal: irmaaCertified, barTotal: irmaaEnrolled },
           { label: 'NSSA Complete', value: nssaComplete, sub: pct(nssaComplete, nssaEnrolled) + ' of NSSA enrolled', color: NSSA.medium, barVal: nssaComplete, barTotal: nssaEnrolled },
           { label: 'IRMAACP Complete', value: irmaaComplete, sub: pct(irmaaComplete, irmaaEnrolled) + ' of IRMAACP enrolled', color: IRMAA.medium, barVal: irmaaComplete, barTotal: irmaaEnrolled },
-        { label: 'Needs Exam', value: needsExam, sub: pct(needsExam, advisors.length) + ' of cohort', color: '#6b7280', barVal: needsExam, barTotal: advisors.length }
+          { label: 'Needs Exam', value: needsExam, sub: pct(needsExam, advisors.length) + ' of cohort', color: '#6b7280', barVal: needsExam, barTotal: advisors.length }
         ].map(stat => (
           <div key={stat.label} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1rem' }}>
             <p style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>{stat.label}</p>
@@ -226,6 +238,13 @@ export default function Dashboard({ advisors }) {
       </div>
 
       <div style={{ display: 'flex', gap: '10px', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <input
+          type="text"
+          placeholder="Search by name or email..."
+          value={search}
+          onChange={e => { setSearch(e.target.value); setPage(1) }}
+          style={{ fontSize: '13px', padding: '6px 10px', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', minWidth: '220px' }}
+        />
         <select style={selectStyle} value={courseFilter} onChange={e => { setCourseFilter(e.target.value); setPage(1) }}>
           <option value="all">All courses</option>
           <option value="nssa">NSSA only</option>
@@ -239,7 +258,7 @@ export default function Dashboard({ advisors }) {
           <option value="not-started">Not started</option>
         </select>
         <span style={{ fontSize: '13px', color: '#666', marginLeft: 'auto' }}>
-          {filtered.length} advisor{filtered.length !== 1 ? 's' : ''} shown
+          {filtered.length} student{filtered.length !== 1 ? 's' : ''} shown
         </span>
       </div>
 
@@ -273,7 +292,7 @@ export default function Dashboard({ advisors }) {
             {paginated.length === 0 && (
               <tr>
                 <td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: '#999', fontSize: '13px' }}>
-                  No advisors match the current filters
+                  No students match the current filters
                 </td>
               </tr>
             )}
