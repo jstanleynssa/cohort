@@ -153,6 +153,7 @@ function shouldShowNudge(courseData) {
   if (!courseData) return false
   if (courseData.certified) return false
   if (courseData.exam_passed) return false
+  if (courseData.pct_complete === 100) return false  // course complete — no nudge needed
   return true
 }
 
