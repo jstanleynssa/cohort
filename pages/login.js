@@ -20,7 +20,7 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: 'https://dashboard.nssapros.com'
+        emailRedirectTo: 'https://dashboard.nssapros.com/auth/callback'
       }
     })
 
