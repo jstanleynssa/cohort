@@ -138,9 +138,11 @@ function NudgeButton({ advisor, course, supervisorName }) {
   const courseData = course === 'NSSA' ? advisor.nssa : advisor.irmaa
   if (!courseData || courseData.certified) return null
 
+  const href = buildNudgeMailto(advisor, course, supervisorName)
+
   return (
     
-      href={buildNudgeMailto(advisor, course, supervisorName)}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       style={{
