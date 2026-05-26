@@ -114,27 +114,8 @@ function NudgeButton({ advisor, course, supervisorName }) {
   const courseData = course === 'NSSA' ? advisor.nssa : advisor.irmaa
   if (!courseData || courseData.certified) return null
   const href = buildNudgeMailto(advisor, course, supervisorName)
-  return (
-    
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{
-        display: 'inline-block',
-        fontSize: '11px',
-        padding: '2px 8px',
-        borderRadius: '4px',
-        background: '#f3f4f6',
-        color: '#374151',
-        textDecoration: 'none',
-        border: '1px solid #e5e7eb',
-        marginTop: '4px',
-        cursor: 'pointer'
-      }}
-    >
-      ✉ Nudge
-    </a>
-  )
+  const style = { display: 'inline-block', fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: '#f3f4f6', color: '#374151', textDecoration: 'none', border: '1px solid #e5e7eb', marginTop: '4px', cursor: 'pointer' }
+  return <a href={href} target="_blank" rel="noopener noreferrer" style={style}>✉ Nudge</a>
 }
 
 function CourseColumns({ course, advisor, courseName, supervisorName }) {
