@@ -2,12 +2,22 @@ import { createServerSupabaseClient } from '@supabase/auth-helpers-nextjs'
 
 export async function getServerSideProps(context) {
   const supabaseServer = createServerSupabaseClient(context)
-  
-  const { data, error } = await supabaseServer.auth.exchangeCodeForSession(
-    context.query.code
-  )
+  const { code, token, type } = context.query
 
-  if (error || !data.session) {
+  if (code) {
+    await supabaseServer.auth.exchangeCodeForSession(code)
+  }
+
+  if (token && type) {
+    await supabaseServer.auth.verifyOtp({
+      token_hash: token,
+      type: type
+    })
+  }
+
+  const { data: { session } } = await supabaseServer.auth.getSession()
+
+  if (!session) {
     return { redirect: { destination: '/login?error=auth', permanent: false } }
   }
 
