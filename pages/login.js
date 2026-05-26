@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import { useRouter } from 'next/router'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -7,12 +8,14 @@ const supabase = createClient(
 )
 
 export default function Login() {
+  const router = useRouter()
   const [email, setEmail] = useState('')
-  const [submitted, setSubmitted] = useState(false)
+  const [token, setToken] = useState('')
+  const [step, setStep] = useState('email') // 'email' | 'code'
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  async function handleSubmit(e) {
+  async function handleEmailSubmit(e) {
     e.preventDefault()
     setLoading(true)
     setError(null)
@@ -20,7 +23,7 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: 'https://dashboard.nssapros.com/auth/callback'
+        shouldCreateUser: false, // only allow existing users
       }
     })
 
@@ -28,8 +31,27 @@ export default function Login() {
       setError(error.message)
       setLoading(false)
     } else {
-      setSubmitted(true)
+      setStep('code')
       setLoading(false)
+    }
+  }
+
+  async function handleCodeSubmit(e) {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'email',
+    })
+
+    if (error) {
+      setError(error.message)
+      setLoading(false)
+    } else {
+      router.replace('/')
     }
   }
 
@@ -60,27 +82,14 @@ export default function Login() {
             Partner Dashboard
           </h1>
           <p style={{ color: '#666', fontSize: '14px' }}>
-            Enter your email to receive a login link
+            {step === 'email'
+              ? 'Enter your email to receive a login code'
+              : `Enter the 6-digit code sent to ${email}`}
           </p>
         </div>
 
-        {submitted ? (
-          <div style={{
-            background: '#f0fdf4',
-            border: '1px solid #bbf7d0',
-            borderRadius: '8px',
-            padding: '1rem',
-            textAlign: 'center'
-          }}>
-            <p style={{ color: '#16a34a', fontWeight: 500, marginBottom: '4px' }}>
-              Check your email
-            </p>
-            <p style={{ color: '#666', fontSize: '13px' }}>
-              We sent a login link to {email}
-            </p>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit}>
+        {step === 'email' ? (
+          <form onSubmit={handleEmailSubmit}>
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: '#374151' }}>
                 Email address
@@ -121,7 +130,75 @@ export default function Login() {
                 opacity: loading || !email ? 0.6 : 1
               }}
             >
-              {loading ? 'Sending...' : 'Send login link'}
+              {loading ? 'Sending...' : 'Send login code'}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleCodeSubmit}>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: '#374151' }}>
+                6-digit code
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                value={token}
+                onChange={e => setToken(e.target.value.replace(/\D/g, ''))}
+                required
+                placeholder="123456"
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  fontSize: '24px',
+                  letterSpacing: '0.5em',
+                  textAlign: 'center',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            {error && (
+              <p style={{ color: '#dc2626', fontSize: '13px', marginBottom: '1rem' }}>{error}</p>
+            )}
+            <button
+              type="submit"
+              disabled={loading || token.length !== 6}
+              style={{
+                width: '100%',
+                padding: '10px',
+                background: '#13405E',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: 500,
+                cursor: loading || token.length !== 6 ? 'not-allowed' : 'pointer',
+                opacity: loading || token.length !== 6 ? 0.6 : 1
+              }}
+            >
+              {loading ? 'Verifying...' : 'Sign in'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setStep('email'); setToken(''); setError(null) }}
+              style={{
+                width: '100%',
+                padding: '10px',
+                background: 'transparent',
+                color: '#6b7280',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '13px',
+                cursor: 'pointer',
+                marginTop: '8px'
+              }}
+            >
+              ← Use a different email
             </button>
           </form>
         )}
