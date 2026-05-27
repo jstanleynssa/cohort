@@ -96,6 +96,38 @@ export async function getServerSideProps(context) {
   }
 }
 
+function getExamPurchaseUrl(advisor, course) {
+  const hasNssa = advisor.nssa?.exam_purchased || advisor.nssa?.exam_passed
+  const hasIrmaa = advisor.irmaa?.exam_purchased || advisor.irmaa?.exam_passed
+  if (course === 'NSSA') {
+    return hasIrmaa
+      ? 'https://www.nssapros.com/offers/4YpLpE8j/checkout'
+      : 'https://www.nssapros.com/offers/GJSX238b/checkout'
+  }
+  if (course === 'IRMAACP') {
+    return hasNssa
+      ? 'https://www.nssapros.com/offers/bqt32vof/checkout'
+      : 'https://www.nssapros.com/offers/8sL5Vhk8/checkout'
+  }
+}
+
+function buildExamPurchaseMailto(advisor, course, supervisorName) {
+  const firstName = advisor.name ? advisor.name.split(' ')[0] : advisor.email
+  const courseName = course === 'NSSA' ? 'NSSA® Social Security' : 'IRMAACP™ Medicare & IRMAA'
+  const purchaseUrl = getExamPurchaseUrl(advisor, course)
+  const subject = encodeURIComponent(`Your ${courseName} Certification Exam`)
+  const body = encodeURIComponent(
+    `Hi ${firstName},\n\n` +
+    `Congratulations on completing the ${courseName} course! ` +
+    `${supervisorName ? supervisorName + ' wanted to reach out' : 'We wanted to check in'} and encourage you to take the next step — purchasing and sitting for your certification exam.\n\n` +
+    `You can purchase your exam here:\n${purchaseUrl}\n\n` +
+    `The exam is the final step to earning your certification and it will be a valuable credential for your practice.\n\n` +
+    `Please don't hesitate to reach out if you have any questions.\n\n` +
+    `Best regards,\n${supervisorName || 'Your Training Coordinator'}`
+  )
+  return `mailto:${advisor.email}?subject=${subject}&body=${body}`
+}
+
 function buildNudgeMailto(advisor, course, supervisorName) {
   const courseData = course === 'NSSA' ? advisor.nssa : advisor.irmaa
   const firstName = advisor.name ? advisor.name.split(' ')[0] : advisor.email
@@ -154,13 +186,20 @@ function pct(num, den) {
   return Math.round((num / den) * 100) + '%'
 }
 
-// Nudge: show when course started but not complete (in progress), or not started
+// Nudge: show when course is in progress (1-99%) or not started
 function shouldShowNudge(courseData) {
   if (!courseData) return false
   if (courseData.certified) return false
   if (courseData.exam_passed) return false
   if (courseData.pct_complete === 100) return false
   return true
+}
+
+// Exam nudge: show when course complete but exam not yet purchased
+function shouldShowExamNudge(courseData) {
+  if (!courseData) return false
+  if (courseData.exam_purchased || courseData.exam_passed || courseData.certified) return false
+  return courseData.pct_complete === 100
 }
 
 // Enroll request: ONLY when not enrolled at all
@@ -199,6 +238,19 @@ function NudgeButton({ advisor, course, supervisorName }) {
   )
 }
 
+function ExamNudgeButton({ advisor, course, supervisorName }) {
+  const courseData = course === 'NSSA' ? advisor.nssa : advisor.irmaa
+  if (!shouldShowExamNudge(courseData)) return null
+  const href = buildExamPurchaseMailto(advisor, course, supervisorName)
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" style={{
+      display: 'inline-block', fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
+      background: '#fefce8', color: '#854d0e', textDecoration: 'none',
+      border: '1px solid #fde68a', marginTop: '4px', cursor: 'pointer'
+    }}>💳 Nudge to Purchase Exam</a>
+  )
+}
+
 function EnrollButton({ advisor, course, supervisorName, orgName }) {
   const courseData = course === 'NSSA' ? advisor.nssa : advisor.irmaa
   if (!shouldShowEnrollRequest(courseData)) return null
@@ -231,6 +283,7 @@ function CourseColumns({ course, advisor, courseName, supervisorName, orgName })
         <ProgressBadge pct={course.pct_complete} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
           <NudgeButton advisor={advisor} course={courseName} supervisorName={supervisorName} />
+          <ExamNudgeButton advisor={advisor} course={courseName} supervisorName={supervisorName} />
         </div>
       </td>
       <td style={td}><ExamBadge purchased={course.exam_purchased} passed={course.exam_passed} /></td>
@@ -328,6 +381,10 @@ function StatusKey() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '11px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '1px 6px', color: '#374151' }}>✉ Nudge</span>
           <span style={{ fontSize: '12px', color: '#6b7280' }}>— Email the student to encourage progress on a course in progress</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '11px', background: '#fefce8', border: '1px solid #fde68a', borderRadius: '4px', padding: '1px 6px', color: '#854d0e' }}>💳 Nudge to Purchase Exam</span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}>— Email the student with a link to purchase their certification exam</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '11px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '1px 6px', color: '#1d4ed8' }}>+ Request Enrollment</span>
