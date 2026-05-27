@@ -225,42 +225,61 @@ function CertBadge({ certified }) {
   return <span style={{ color: '#999' }}>—</span>
 }
 
-function NudgeButton({ advisor, course, supervisorName }) {
-  const courseData = course === 'NSSA' ? advisor.nssa : advisor.irmaa
-  if (!shouldShowNudge(courseData)) return null
-  const href = buildNudgeMailto(advisor, course, supervisorName)
+// Interactive status styles
+const actionLink = (bg, color, border) => ({
+  display: 'inline-block', fontSize: '13px', padding: '0', borderRadius: '4px',
+  background: bg, color, textDecoration: 'none', border: `1px solid ${border}`,
+  padding: '1px 7px', cursor: 'pointer', fontWeight: 400
+})
+
+function ProgressStatus({ course, advisor, courseName, supervisorName }) {
+  if (!course) return <span style={{ color: '#999' }}>Not enrolled</span>
+  const p = course.pct_complete
+  if (p === 100) return <span style={{ color: '#16a34a', fontWeight: 500 }}>Complete</span>
+  if (p > 0) {
+    // In progress — nudge is actionable
+    const href = buildNudgeMailto(advisor, courseName, supervisorName)
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer"
+        style={actionLink('#f3f4f6', '#374151', '#e5e7eb')}>
+        + {p}% complete
+      </a>
+    )
+  }
+  // Not started — nudge actionable
+  const href = buildNudgeMailto(advisor, courseName, supervisorName)
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" style={{
-      display: 'inline-block', fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
-      background: '#f3f4f6', color: '#374151', textDecoration: 'none',
-      border: '1px solid #e5e7eb', marginTop: '4px', cursor: 'pointer'
-    }}>✉ Nudge</a>
+    <a href={href} target="_blank" rel="noopener noreferrer"
+      style={actionLink('#fef2f2', '#dc2626', '#fecaca')}>
+      + Not started
+    </a>
   )
 }
 
-function ExamNudgeButton({ advisor, course, supervisorName }) {
-  const courseData = course === 'NSSA' ? advisor.nssa : advisor.irmaa
-  if (!shouldShowExamNudge(courseData)) return null
-  const href = buildExamPurchaseMailto(advisor, course, supervisorName)
-  return (
-    <a href={href} target="_blank" rel="noopener noreferrer" style={{
-      display: 'inline-block', fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
-      background: '#fefce8', color: '#854d0e', textDecoration: 'none',
-      border: '1px solid #fde68a', marginTop: '4px', cursor: 'pointer'
-    }}>💳 Nudge to Purchase Exam</a>
-  )
+function ExamStatus({ course, advisor, courseName, supervisorName }) {
+  if (!course) return <span style={{ color: '#999' }}>—</span>
+  if (course.exam_passed) return <span style={{ color: '#16a34a', fontWeight: 500 }}>✓ Passed</span>
+  if (course.exam_purchased) return <span style={{ color: '#2563eb' }}>Purchased</span>
+  // Not purchased — only actionable if course is complete
+  if (course.pct_complete === 100) {
+    const href = buildExamPurchaseMailto(advisor, courseName, supervisorName)
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer"
+        style={actionLink('#fefce8', '#854d0e', '#fde68a')}>
+        + Not purchased
+      </a>
+    )
+  }
+  return <span style={{ color: '#dc2626' }}>Not purchased</span>
 }
 
-function EnrollButton({ advisor, course, supervisorName, orgName }) {
-  const courseData = course === 'NSSA' ? advisor.nssa : advisor.irmaa
-  if (!shouldShowEnrollRequest(courseData)) return null
-  const href = buildEnrollmentMailto(advisor, course, supervisorName, orgName)
+function NotEnrolledStatus({ advisor, courseName, supervisorName, orgName }) {
+  const href = buildEnrollmentMailto(advisor, courseName, supervisorName, orgName)
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" style={{
-      display: 'inline-block', fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
-      background: '#eff6ff', color: '#1d4ed8', textDecoration: 'none',
-      border: '1px solid #bfdbfe', marginTop: '4px', cursor: 'pointer'
-    }}>+ Request Enrollment</a>
+    <a href={href} target="_blank" rel="noopener noreferrer"
+      style={actionLink('#eff6ff', '#1d4ed8', '#bfdbfe')}>
+      + Not enrolled
+    </a>
   )
 }
 
@@ -268,10 +287,7 @@ function CourseColumns({ course, advisor, courseName, supervisorName, orgName })
   if (!course) return (
     <>
       <td style={td}>
-        <span style={{ color: '#999' }}>Not enrolled</span>
-        <div>
-          <EnrollButton advisor={advisor} course={courseName} supervisorName={supervisorName} orgName={orgName} />
-        </div>
+        <NotEnrolledStatus advisor={advisor} courseName={courseName} supervisorName={supervisorName} orgName={orgName} />
       </td>
       <td style={td}><span style={{ color: '#999' }}>—</span></td>
       <td style={td}><span style={{ color: '#999' }}>—</span></td>
@@ -280,13 +296,11 @@ function CourseColumns({ course, advisor, courseName, supervisorName, orgName })
   return (
     <>
       <td style={td}>
-        <ProgressBadge pct={course.pct_complete} />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          <NudgeButton advisor={advisor} course={courseName} supervisorName={supervisorName} />
-          <ExamNudgeButton advisor={advisor} course={courseName} supervisorName={supervisorName} />
-        </div>
+        <ProgressStatus course={course} advisor={advisor} courseName={courseName} supervisorName={supervisorName} />
       </td>
-      <td style={td}><ExamBadge purchased={course.exam_purchased} passed={course.exam_passed} /></td>
+      <td style={td}>
+        <ExamStatus course={course} advisor={advisor} courseName={courseName} supervisorName={supervisorName} />
+      </td>
       <td style={td}><CertBadge certified={course.certified} /></td>
     </>
   )
@@ -364,35 +378,42 @@ function StatusKey() {
     <div style={{ marginTop: '1.5rem', background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1rem 1.25rem' }}>
       <p style={{ fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status Key</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px' }}>
-        {[
-          { color: '#16a34a', dot: true, label: 'Complete / Passed / Certified', desc: 'Student has fully completed this stage' },
-          { color: '#2563eb', dot: true, label: 'In Progress / Purchased', desc: 'Course partially complete, or exam purchased but not yet taken' },
-          { color: '#dc2626', dot: true, label: 'Not Started / Not Purchased', desc: 'No activity recorded for this stage' },
-          { color: '#999', dot: false, label: '— Not enrolled', desc: 'Student has no record for this course' },
-        ].map(item => (
-          <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: item.color, fontWeight: 600, fontSize: '13px', minWidth: 16 }}>{item.dot ? '●' : '—'}</span>
-            <div>
-              <span style={{ fontSize: '12px', fontWeight: 500, color: item.color }}>{item.label}</span>
-              <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '6px' }}>— {item.desc}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ color: '#16a34a', fontWeight: 600, fontSize: '13px' }}>●</span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}><span style={{ fontWeight: 500, color: '#16a34a' }}>Complete / Passed / Certified</span> — Student has fully completed this stage</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ color: '#2563eb', fontWeight: 600, fontSize: '13px' }}>●</span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}><span style={{ fontWeight: 500, color: '#2563eb' }}>In Progress / Purchased</span> — Course partially complete, or exam purchased but not yet taken</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ color: '#999', fontSize: '13px' }}>—</span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}>Not enrolled in this course</span>
+        </div>
+        <div style={{ width: '100%', borderTop: '1px solid #f3f4f6', paddingTop: '10px', marginTop: '2px' }}>
+          <p style={{ fontSize: '11px', fontWeight: 600, color: '#6b7280', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Actionable statuses — click to send email</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px', padding: '1px 7px', color: '#dc2626' }}>+ Not started</span>
+              <span style={{ fontSize: '12px', color: '#6b7280' }}>— Emails student to encourage starting the course</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '1px 7px', color: '#374151' }}>+ 62.5% complete</span>
+              <span style={{ fontSize: '12px', color: '#6b7280' }}>— Emails student to encourage finishing the course</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12px', background: '#fefce8', border: '1px solid #fde68a', borderRadius: '4px', padding: '1px 7px', color: '#854d0e' }}>+ Not purchased</span>
+              <span style={{ fontSize: '12px', color: '#6b7280' }}>— Emails student with link to purchase their exam (shown when course is complete)</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '1px 7px', color: '#1d4ed8' }}>+ Not enrolled</span>
+              <span style={{ fontSize: '12px', color: '#6b7280' }}>— Emails NSSA to request enrollment for this student</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '1px 7px', color: '#15803d' }}>⬆ Request Enrollment (X selected)</span>
+              <span style={{ fontSize: '12px', color: '#6b7280' }}>— Batch email NSSA to enroll multiple selected students</span>
             </div>
           </div>
-        ))}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '11px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '1px 6px', color: '#374151' }}>✉ Nudge</span>
-          <span style={{ fontSize: '12px', color: '#6b7280' }}>— Email the student to encourage progress on a course in progress</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '11px', background: '#fefce8', border: '1px solid #fde68a', borderRadius: '4px', padding: '1px 6px', color: '#854d0e' }}>💳 Nudge to Purchase Exam</span>
-          <span style={{ fontSize: '12px', color: '#6b7280' }}>— Email the student with a link to purchase their certification exam</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '11px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '1px 6px', color: '#1d4ed8' }}>+ Request Enrollment</span>
-          <span style={{ fontSize: '12px', color: '#6b7280' }}>— Email NSSA to enroll this student in a course they haven't started</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '11px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '1px 6px', color: '#15803d' }}>⬆ Request Enrollment (selected)</span>
-          <span style={{ fontSize: '12px', color: '#6b7280' }}>— Batch email NSSA to enroll multiple selected students at once</span>
         </div>
       </div>
     </div>
