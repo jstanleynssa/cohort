@@ -143,7 +143,6 @@ function pct(num, den) {
   return Math.round((num / den) * 100) + '%'
 }
 
-// Pill-style actionable link
 function ActionPill({ href, color, bg, border, label, tooltip }) {
   return (
     <a href={href} target="_blank" rel="noopener noreferrer" title={tooltip} style={{
@@ -154,61 +153,39 @@ function ActionPill({ href, color, bg, border, label, tooltip }) {
   )
 }
 
-// Progress column cell
 function ProgressStatus({ course, advisor, courseName, supervisorName }) {
-  const isNssa = courseName === 'NSSA'
-  const accent = isNssa ? NSSA.medium : IRMAA.medium
-
-  if (!course) return null // handled by CourseColumns not-enrolled branch
-
+  const accent = courseName === 'NSSA' ? NSSA.medium : IRMAA.medium
+  if (!course) return null
   const p = course.pct_complete
-
   if (p === 100) return <span style={{ color: accent, fontWeight: 500 }}>Complete</span>
-
   const href = buildNudgeMailto(advisor, courseName, supervisorName)
   if (p > 0) return (
-    <ActionPill
-      href={href}
-      color={GRAY.text} bg={GRAY.bg} border={GRAY.border}
+    <ActionPill href={href} color={GRAY.text} bg={GRAY.bg} border={GRAY.border}
       label={`${p}% complete`}
-      tooltip={`Click to email ${advisor.name || advisor.email} and encourage them to finish the course`}
-    />
+      tooltip={`Click to email ${advisor.name || advisor.email} and encourage them to finish the course`} />
   )
   return (
-    <ActionPill
-      href={href}
-      color={GRAY.text} bg={GRAY.bg} border={GRAY.border}
+    <ActionPill href={href} color={GRAY.text} bg={GRAY.bg} border={GRAY.border}
       label="Not started"
-      tooltip={`Click to email ${advisor.name || advisor.email} and encourage them to start the course`}
-    />
+      tooltip={`Click to email ${advisor.name || advisor.email} and encourage them to start the course`} />
   )
 }
 
-// Exam column cell
 function ExamStatus({ course, advisor, courseName, supervisorName }) {
-  const isNssa = courseName === 'NSSA'
-  const accent = isNssa ? NSSA.medium : IRMAA.medium
-
+  const accent = courseName === 'NSSA' ? NSSA.medium : IRMAA.medium
   if (!course) return <span style={{ color: '#999' }}>—</span>
   if (course.exam_passed) return <span style={{ color: accent, fontWeight: 500 }}>✓ Passed</span>
   if (course.exam_purchased) return <span style={{ color: accent }}>Purchased</span>
-
-  // Not purchased — always actionable
   const href = buildExamPurchaseMailto(advisor, courseName, supervisorName)
   return (
-    <ActionPill
-      href={href}
-      color={GRAY.text} bg={GRAY.bg} border={GRAY.border}
+    <ActionPill href={href} color={GRAY.text} bg={GRAY.bg} border={GRAY.border}
       label="Not purchased"
-      tooltip={`Click to email ${advisor.name || advisor.email} with a link to purchase the ${courseName} exam`}
-    />
+      tooltip={`Click to email ${advisor.name || advisor.email} with a link to purchase the ${courseName} exam`} />
   )
 }
 
-// Cert column cell
 function CertStatus({ course, courseName }) {
-  const isNssa = courseName === 'NSSA'
-  const accent = isNssa ? NSSA.medium : IRMAA.medium
+  const accent = courseName === 'NSSA' ? NSSA.medium : IRMAA.medium
   if (!course) return <span style={{ color: '#999' }}>—</span>
   if (course.certified) return <span style={{ color: accent, fontWeight: 500 }}>✓ Certified</span>
   return <span style={{ color: '#999' }}>—</span>
@@ -220,12 +197,9 @@ function CourseColumns({ course, advisor, courseName, supervisorName, orgName })
     return (
       <>
         <td style={td}>
-          <ActionPill
-            href={href}
-            color={GRAY.text} bg={GRAY.bg} border={GRAY.border}
+          <ActionPill href={href} color={GRAY.text} bg={GRAY.bg} border={GRAY.border}
             label="Not enrolled"
-            tooltip={`Click to email NSSA and request enrollment for ${advisor.name || advisor.email} in the ${courseName} course`}
-          />
+            tooltip={`Click to email NSSA and request enrollment for ${advisor.name || advisor.email} in the ${courseName} course`} />
         </td>
         <td style={td}><span style={{ color: '#999' }}>—</span></td>
         <td style={td}><span style={{ color: '#999' }}>—</span></td>
@@ -311,16 +285,32 @@ function StatusKey() {
       <p style={{ fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status Key</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ color: NSSA.light, fontWeight: 600 }}>●</span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}><span style={{ color: NSSA.light, fontWeight: 500 }}>NSSA Enrolled</span></span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ color: NSSA.medium, fontWeight: 600 }}>●</span>
-          <span style={{ fontSize: '12px', color: '#6b7280' }}><span style={{ color: NSSA.medium, fontWeight: 500 }}>NSSA Complete / Passed / Certified</span></span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}><span style={{ color: NSSA.medium, fontWeight: 500 }}>NSSA Course Completed / Exam Passed</span></span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ color: NSSA.dark, fontWeight: 600 }}>●</span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}><span style={{ color: NSSA.dark, fontWeight: 500 }}>NSSA Certified</span></span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ color: IRMAA.light, fontWeight: 600 }}>●</span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}><span style={{ color: IRMAA.light, fontWeight: 500 }}>IRMAACP Enrolled</span></span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ color: IRMAA.medium, fontWeight: 600 }}>●</span>
-          <span style={{ fontSize: '12px', color: '#6b7280' }}><span style={{ color: IRMAA.medium, fontWeight: 500 }}>IRMAACP Complete / Passed / Certified</span></span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}><span style={{ color: IRMAA.medium, fontWeight: 500 }}>IRMAACP Course Completed / Exam Passed</span></span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ color: IRMAA.dark, fontWeight: 600 }}>●</span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}><span style={{ color: IRMAA.dark, fontWeight: 500 }}>IRMAACP Certified</span></span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ color: GRAY.text, fontWeight: 600 }}>●</span>
-          <span style={{ fontSize: '12px', color: '#6b7280' }}><span style={{ color: GRAY.text, fontWeight: 500 }}>Not started / In progress / Not purchased / Not enrolled</span> — gray for any incomplete state</span>
+          <span style={{ fontSize: '12px', color: '#6b7280' }}><span style={{ color: GRAY.text, fontWeight: 500 }}>Not started / In progress / Not purchased / Not enrolled</span></span>
         </div>
       </div>
       <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '10px' }}>
@@ -389,12 +379,23 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
     return allPartners.find(p => p.id === orgFilter)?.name || ''
   }, [isAdmin, orgFilter, allPartners, orgName])
 
+  const totalAdvisors = orgFilteredAdvisors.length
   const nssaEnrolled = orgFilteredAdvisors.filter(a => a.nssa).length
   const irmaaEnrolled = orgFilteredAdvisors.filter(a => a.irmaa).length
   const nssaCertified = orgFilteredAdvisors.filter(a => a.nssa?.certified).length
   const irmaaCertified = orgFilteredAdvisors.filter(a => a.irmaa?.certified).length
   const nssaComplete = orgFilteredAdvisors.filter(a => a.nssa?.pct_complete === 100).length
   const irmaaComplete = orgFilteredAdvisors.filter(a => a.irmaa?.pct_complete === 100).length
+
+  const kpiCards = [
+    { label: 'Enrolled', value: totalAdvisors, color: '#374151' },
+    { label: 'NSSA Enrolled', value: nssaEnrolled, sub: pct(nssaEnrolled, totalAdvisors) + ' of cohort', color: NSSA.light, barVal: nssaEnrolled, barTotal: totalAdvisors },
+    { label: 'NSSA Course Completed', value: nssaComplete, sub: pct(nssaComplete, nssaEnrolled) + ' of NSSA enrolled', color: NSSA.medium, barVal: nssaComplete, barTotal: nssaEnrolled },
+    { label: 'NSSA Certified', value: nssaCertified, sub: pct(nssaCertified, nssaEnrolled) + ' of NSSA enrolled', color: NSSA.dark, barVal: nssaCertified, barTotal: nssaEnrolled },
+    { label: 'IRMAACP Enrolled', value: irmaaEnrolled, sub: pct(irmaaEnrolled, totalAdvisors) + ' of cohort', color: IRMAA.light, barVal: irmaaEnrolled, barTotal: totalAdvisors },
+    { label: 'IRMAACP Course Completed', value: irmaaComplete, sub: pct(irmaaComplete, irmaaEnrolled) + ' of IRMAACP enrolled', color: IRMAA.medium, barVal: irmaaComplete, barTotal: irmaaEnrolled },
+    { label: 'IRMAACP Certified', value: irmaaCertified, sub: pct(irmaaCertified, irmaaEnrolled) + ' of IRMAACP enrolled', color: IRMAA.dark, barVal: irmaaCertified, barTotal: irmaaEnrolled },
+  ]
 
   function handleSort(col) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -443,15 +444,6 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
   const batchCourse = courseFilter === 'nssa' ? 'NSSA' : courseFilter === 'irmaa' ? 'IRMAACP' : 'NSSA/IRMAACP'
   const batchEnrollHref = someSelected ? buildBatchEnrollmentMailto(selectedAdvisors, batchCourse, activeSupervisorName, activeOrgName) : '#'
 
-  // KPI cards: Enrolled, NSSA Course Completed, NSSA Certified, IRMAACP Course Completed, IRMAACP Certified
-  const kpiCards = [
-    { label: 'Enrolled', value: orgFilteredAdvisors.length, color: '#374151' },
-    { label: 'NSSA Course Completed', value: nssaComplete, sub: pct(nssaComplete, nssaEnrolled) + ' of NSSA enrolled', color: NSSA.medium, barVal: nssaComplete, barTotal: nssaEnrolled },
-    { label: 'NSSA Certified', value: nssaCertified, sub: pct(nssaCertified, nssaEnrolled) + ' of NSSA enrolled', color: NSSA.medium, barVal: nssaCertified, barTotal: nssaEnrolled },
-    { label: 'IRMAACP Course Completed', value: irmaaComplete, sub: pct(irmaaComplete, irmaaEnrolled) + ' of IRMAACP enrolled', color: IRMAA.medium, barVal: irmaaComplete, barTotal: irmaaEnrolled },
-    { label: 'IRMAACP Certified', value: irmaaCertified, sub: pct(irmaaCertified, irmaaEnrolled) + ' of IRMAACP enrolled', color: IRMAA.medium, barVal: irmaaCertified, barTotal: irmaaEnrolled },
-  ]
-
   const headerCols = [
     { key: 'name', label: 'Student', bg: '#1a1a1a', width: '20%' },
     { key: 'nssa-progress', label: 'NSSA Progress', bg: NSSA.dark },
@@ -469,7 +461,7 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
         <div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '4px' }}>{displayOrgName} Training Dashboard</h1>
-          <p style={{ color: '#666', fontSize: '14px' }}>{orgFilteredAdvisors.length} students enrolled</p>
+          <p style={{ color: '#666', fontSize: '14px' }}>{totalAdvisors} students enrolled</p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px' }}>
           <img src="/nssa-irmaa-logos.png" alt="NSSA and IRMAACP logos" style={{ height: '50px', width: 'auto' }} />
@@ -497,7 +489,7 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
       )}
 
       {/* KPI cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '12px', marginBottom: '2rem' }}>
         {kpiCards.map(stat => (
           <div key={stat.label} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '1rem' }}>
             <p style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>{stat.label}</p>
