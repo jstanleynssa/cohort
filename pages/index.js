@@ -29,15 +29,24 @@ export async function getServerSideProps(context) {
   }
 
   const orgId = isAdmin ? null : profile?.org_id
+
+  // A non-admin supervisor must be scoped to exactly one organization. If their
+  // profile has no org_id, they have no cohort to view — return nothing rather
+  // than falling through to an unfiltered query that would leak every org's
+  // advisors. Fail closed, not open.
+  if (!isAdmin && !orgId) {
+    return { props: { advisors: [], orgName: '', supervisorName: '', isAdmin: false, allPartners: [], userEmail: session.user.email } }
+  }
+
   let partnerData = null
-  if (!isAdmin && orgId) {
+  if (!isAdmin) {
     const { data } = await supabaseServer
       .from('partners').select('name, contact_name').eq('id', orgId).single()
     partnerData = data
   }
 
   let progressQuery = supabaseServer.from('advisor_progress').select('*').order('email')
-  if (!isAdmin && orgId) progressQuery = progressQuery.eq('org_id', orgId)
+  if (!isAdmin) progressQuery = progressQuery.eq('org_id', orgId)
 
   const { data: progressData, error } = await progressQuery
   if (error) {
