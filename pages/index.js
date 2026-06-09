@@ -29,15 +29,24 @@ export async function getServerSideProps(context) {
   }
 
   const orgId = isAdmin ? null : profile?.org_id
+
+  // A non-admin supervisor must be scoped to exactly one organization. If their
+  // profile has no org_id, they have no cohort to view — return nothing rather
+  // than falling through to an unfiltered query that would leak every org's
+  // advisors. Fail closed, not open.
+  if (!isAdmin && !orgId) {
+    return { props: { advisors: [], orgName: '', supervisorName: '', isAdmin: false, allPartners: [], userEmail: session.user.email } }
+  }
+
   let partnerData = null
-  if (!isAdmin && orgId) {
+  if (!isAdmin) {
     const { data } = await supabaseServer
       .from('partners').select('name, contact_name').eq('id', orgId).single()
     partnerData = data
   }
 
   let progressQuery = supabaseServer.from('advisor_progress').select('*').order('email')
-  if (!isAdmin && orgId) progressQuery = progressQuery.eq('org_id', orgId)
+  if (!isAdmin) progressQuery = progressQuery.eq('org_id', orgId)
 
   const { data: progressData, error } = await progressQuery
   if (error) {
@@ -389,10 +398,10 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
 
   const kpiCards = [
     { label: 'Enrolled', value: totalAdvisors, color: '#374151' },
-    { label: 'NSSA Enrolled', value: nssaEnrolled, sub: pct(nssaEnrolled, totalAdvisors) + ' of cohort', color: NSSA.light, barVal: nssaEnrolled, barTotal: totalAdvisors },
+    { label: 'NSSA Enrolled', value: nssaEnrolled, sub: pct(nssaEnrolled, totalAdvisors) + ' of advisors', color: NSSA.light, barVal: nssaEnrolled, barTotal: totalAdvisors },
     { label: 'NSSA Course Completed', value: nssaComplete, sub: pct(nssaComplete, nssaEnrolled) + ' of NSSA enrolled', color: NSSA.medium, barVal: nssaComplete, barTotal: nssaEnrolled },
     { label: 'NSSA Certified', value: nssaCertified, sub: pct(nssaCertified, nssaEnrolled) + ' of NSSA enrolled', color: NSSA.dark, barVal: nssaCertified, barTotal: nssaEnrolled },
-    { label: 'IRMAACP Enrolled', value: irmaaEnrolled, sub: pct(irmaaEnrolled, totalAdvisors) + ' of cohort', color: IRMAA.light, barVal: irmaaEnrolled, barTotal: totalAdvisors },
+    { label: 'IRMAACP Enrolled', value: irmaaEnrolled, sub: pct(irmaaEnrolled, totalAdvisors) + ' of advisors', color: IRMAA.light, barVal: irmaaEnrolled, barTotal: totalAdvisors },
     { label: 'IRMAACP Course Completed', value: irmaaComplete, sub: pct(irmaaComplete, irmaaEnrolled) + ' of IRMAACP enrolled', color: IRMAA.medium, barVal: irmaaComplete, barTotal: irmaaEnrolled },
     { label: 'IRMAACP Certified', value: irmaaCertified, sub: pct(irmaaCertified, irmaaEnrolled) + ' of IRMAACP enrolled', color: IRMAA.dark, barVal: irmaaCertified, barTotal: irmaaEnrolled },
   ]
