@@ -4,7 +4,9 @@ import { NextResponse } from 'next/server'
 export async function middleware(req) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req, res })
-  const { data: { session } } = await supabase.auth.getSession()
+  // getUser() verifies the JWT against the auth server; getSession() only
+  // decodes the cookie. Use the verified call for the access gate.
+  const { data: { user } } = await supabase.auth.getUser()
 
   const isLoginPage = req.nextUrl.pathname === '/login'
   const isCallbackPage = req.nextUrl.pathname === '/auth/callback'
@@ -14,11 +16,11 @@ export async function middleware(req) {
     return res
   }
 
-  if (!session && !isLoginPage) {
+  if (!user && !isLoginPage) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
-  if (session && isLoginPage) {
+  if (user && isLoginPage) {
     return NextResponse.redirect(new URL('/', req.url))
   }
 
