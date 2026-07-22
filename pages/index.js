@@ -156,8 +156,9 @@ function ActionPill({ href, color, bg, border, label, tooltip }) {
 function ProgressStatus({ course, advisor, courseName, supervisorName }) {
   const accent = courseName === 'NSSA' ? NSSA.medium : IRMAA.medium
   if (!course) return null
+  // If certified, always show Complete regardless of tracked module progress
   const p = course.pct_complete
-  if (p === 100) return <span style={{ color: accent, fontWeight: 500 }}>Complete</span>
+  if (p === 100 || course.certified) return <span style={{ color: accent, fontWeight: 500 }}>Complete</span>
   const href = buildNudgeMailto(advisor, courseName, supervisorName)
   if (p > 0) return (
     <ActionPill href={href} color={GRAY.text} bg={GRAY.bg} border={GRAY.border}
