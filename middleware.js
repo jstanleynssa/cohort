@@ -9,6 +9,11 @@ export async function middleware(req) {
   const isLoginPage = req.nextUrl.pathname === '/login'
   const isCallbackPage = req.nextUrl.pathname === '/auth/callback'
 
+  // Noindex auth/utility pages — never meant to appear in search results.
+  if (isLoginPage || isCallbackPage) {
+    res.headers.set('X-Robots-Tag', 'noindex, nofollow')
+  }
+
   // Never block the callback — session isn't established yet when this runs
   if (isCallbackPage) {
     return res
