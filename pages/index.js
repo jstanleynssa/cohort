@@ -24,7 +24,7 @@ export async function getServerSideProps(context) {
   let allPartners = []
   if (isAdmin) {
     const { data: partners } = await supabaseServer
-      .from('partners').select('id, name, contact_name').order('name')
+      .from('partners').select('id, name, contact_name, logo_url').order('name')
     allPartners = partners || []
   }
 
@@ -32,12 +32,15 @@ export async function getServerSideProps(context) {
   let partnerData = null
   if (!isAdmin && orgId) {
     const { data } = await supabaseServer
-      .from('partners').select('name, contact_name').eq('id', orgId).single()
+      .from('partners').select('name, contact_name, logo_url').eq('id', orgId).single()
     partnerData = data
   }
 
   let progressQuery = supabaseServer.from('advisor_progress').select('*').order('email')
+  // Non-admin partner users only see their own org.
+  // Admins load everything — the org filter is applied client-side.
   if (!isAdmin && orgId) progressQuery = progressQuery.eq('org_id', orgId)
+  if (!isAdmin && !orgId) progressQuery = progressQuery.not('org_id', 'is', null)
 
   const { data: progressData, error } = await progressQuery
   if (error) {
@@ -60,6 +63,7 @@ export async function getServerSideProps(context) {
       advisors: Object.values(advisorMap),
       orgName: isAdmin ? 'Admin' : (partnerData?.name || 'Dashboard'),
       supervisorName: partnerData?.contact_name || '',
+      partnerLogoUrl: partnerData?.logo_url || null,
       isAdmin, allPartners, userEmail: session.user.email
     }
   }
@@ -185,6 +189,18 @@ function ExamStatus({ course, advisor, courseName, supervisorName }) {
   )
 }
 
+function RenewalDate({ dateStr }) {
+  if (!dateStr) return <span style={{ color: '#999' }}>—</span>
+  const renewal = new Date(dateStr + 'T00:00:00')
+  const today   = new Date()
+  today.setHours(0, 0, 0, 0)
+  const daysOut = Math.round((renewal - today) / 86400000)
+  const label = renewal.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  if (daysOut < 0)   return <span style={{ color: '#DC2626', fontWeight: 600 }} title="Renewal past due">⚠ {label}</span>
+  if (daysOut <= 60) return <span style={{ color: '#D97706', fontWeight: 600 }} title={`Renews in ${daysOut} days`}>{label}</span>
+  return <span style={{ color: NSSA.dark }}>{label}</span>
+}
+
 function CertStatus({ course, courseName }) {
   const accent = courseName === 'NSSA' ? NSSA.medium : IRMAA.medium
   if (!course) return <span style={{ color: '#999' }}>—</span>
@@ -273,9 +289,11 @@ function getSortValue(advisor, col) {
     case 'nssa-progress': return advisor.nssa?.pct_complete ?? -1
     case 'nssa-exam': return advisor.nssa?.exam_passed ? 2 : advisor.nssa?.exam_purchased ? 1 : 0
     case 'nssa-cert': return advisor.nssa?.certified ? 1 : 0
+    case 'renewal': return advisor.nssa?.renewal_date ?? ''
     case 'irmaa-progress': return advisor.irmaa?.pct_complete ?? -1
     case 'irmaa-exam': return advisor.irmaa?.exam_passed ? 2 : advisor.irmaa?.exam_purchased ? 1 : 0
     case 'irmaa-cert': return advisor.irmaa?.certified ? 1 : 0
+    case 'irmaa-renewal': return advisor.irmaa?.renewal_date ?? ''
     default: return ''
   }
 }
@@ -338,7 +356,7 @@ function StatusKey() {
   )
 }
 
-export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, allPartners, userEmail }) {
+export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, allPartners, userEmail, partnerLogoUrl }) {
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [courseFilter, setCourseFilter] = useState('all')
@@ -358,25 +376,33 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
   }
 
   const orgFilteredAdvisors = useMemo(() => {
-    if (!isAdmin || orgFilter === 'all') return advisors
-    return advisors.filter(a => a.org_id === orgFilter)
+    if (!isAdmin) return advisors
+    if (orgFilter === 'all_users') return advisors                          // everyone
+    if (orgFilter === 'all') return advisors.filter(a => a.org_id)         // org members only
+    return advisors.filter(a => a.org_id === orgFilter)                    // specific org
   }, [advisors, isAdmin, orgFilter])
 
   const displayOrgName = useMemo(() => {
     if (!isAdmin) return orgName
-    if (orgFilter === 'all') return 'Admin'
+    if (orgFilter === 'all_users' || orgFilter === 'all') return 'Admin'
     return allPartners.find(p => p.id === orgFilter)?.name || 'Admin'
   }, [isAdmin, orgFilter, allPartners, orgName])
 
+  const displayLogoUrl = useMemo(() => {
+    if (!isAdmin) return partnerLogoUrl
+    if (orgFilter === 'all_users' || orgFilter === 'all') return null
+    return allPartners.find(p => p.id === orgFilter)?.logo_url || null
+  }, [isAdmin, orgFilter, allPartners, partnerLogoUrl])
+
   const activeSupervisorName = useMemo(() => {
     if (!isAdmin) return supervisorName
-    if (orgFilter === 'all') return ''
+    if (orgFilter === 'all_users' || orgFilter === 'all') return ''
     return allPartners.find(p => p.id === orgFilter)?.contact_name || ''
   }, [isAdmin, orgFilter, allPartners, supervisorName])
 
   const activeOrgName = useMemo(() => {
     if (!isAdmin) return orgName
-    if (orgFilter === 'all') return ''
+    if (orgFilter === 'all_users' || orgFilter === 'all') return ''
     return allPartners.find(p => p.id === orgFilter)?.name || ''
   }, [isAdmin, orgFilter, allPartners, orgName])
 
@@ -450,21 +476,36 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
     { key: 'nssa-progress', label: 'NSSA Progress', bg: NSSA.dark },
     { key: 'nssa-exam', label: 'NSSA Exam', bg: NSSA.dark },
     { key: 'nssa-cert', label: 'NSSA Cert', bg: NSSA.dark },
+    { key: 'renewal', label: 'NSSA Renewal', bg: NSSA.dark },
     { key: 'irmaa-progress', label: 'IRMAACP Progress', bg: IRMAA.dark },
     { key: 'irmaa-exam', label: 'IRMAACP Exam', bg: IRMAA.dark },
     { key: 'irmaa-cert', label: 'IRMAACP Cert', bg: IRMAA.dark },
+    { key: 'irmaa-renewal', label: 'IRMAACP Renewal', bg: IRMAA.dark },
   ]
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-        <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '4px' }}>{displayOrgName} Training Dashboard</h1>
-          <p style={{ color: '#666', fontSize: '14px' }}>{totalAdvisors} students enrolled</p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem', gap: '16px' }}>
+        {/* Left: partner logo or org name */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: 0 }}>
+          {displayLogoUrl
+            ? <img src={displayLogoUrl} alt={displayOrgName + ' logo'} style={{ height: '52px', width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
+            : <div>
+                <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '4px' }}>{displayOrgName} Training Dashboard</h1>
+                <p style={{ color: '#666', fontSize: '14px' }}>{totalAdvisors} students enrolled</p>
+              </div>
+          }
+          {displayLogoUrl && (
+            <div>
+              <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '4px' }}>{displayOrgName} Training Dashboard</h1>
+              <p style={{ color: '#666', fontSize: '14px' }}>{totalAdvisors} students enrolled</p>
+            </div>
+          )}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px' }}>
+        {/* Right: NSSA logos + user controls */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px', flexShrink: 0 }}>
           <img src="/nssa-irmaa-logos.png" alt="NSSA and IRMAACP logos" style={{ height: '50px', width: 'auto' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '12px', color: '#6b7280' }}>{userEmail}</span>
@@ -483,6 +524,7 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
           <label style={{ fontSize: '13px', fontWeight: 500, color: '#374151' }}>Viewing organization:</label>
           <select style={{ ...selectStyle, minWidth: '240px' }} value={orgFilter}
             onChange={e => { setOrgFilter(e.target.value); setPage(1); setSelectedEmails(new Set()) }}>
+            <option value="all_users">All users</option>
             <option value="all">All organizations</option>
             {allPartners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
@@ -566,7 +608,9 @@ export default function Dashboard({ advisors, orgName, supervisorName, isAdmin, 
                   {advisor.name && <p style={{ fontSize: '12px', color: '#666' }}>{advisor.email}</p>}
                 </td>
                 <CourseColumns course={advisor.nssa} advisor={advisor} courseName="NSSA" supervisorName={activeSupervisorName} orgName={activeOrgName} />
+                <td style={td}><RenewalDate dateStr={advisor.nssa?.renewal_date} /></td>
                 <CourseColumns course={advisor.irmaa} advisor={advisor} courseName="IRMAACP" supervisorName={activeSupervisorName} orgName={activeOrgName} />
+                <td style={td}><RenewalDate dateStr={advisor.irmaa?.renewal_date} /></td>
               </tr>
             ))}
             {paginated.length === 0 && (
